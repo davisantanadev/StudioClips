@@ -60,16 +60,17 @@ def test_api_auto_and_enabled_are_saved(tmp_path):
     c = TestClient(create_app(s))
     assert c.post("/api/auto", json={"on": False}).json()["auto"] is False
     assert load_user_settings()["auto_clip"] is False and s.auto_clip is False
-    r = c.put("/api/streamers/enabled", json={"enabled": {"alanzoka": False, "xqc": True}})
+    r = c.put("/api/streamers/enabled", json={"enabled": {"alanzoka": False, "kaicenat": True}})
     assert r.status_code == 200
     by = {x["name"]: x["enabled"] for x in c.get("/api/streamers").json()}
-    assert by["alanzoka"] is False and by["xqc"] is True
+    assert by["alanzoka"] is False and by["kaicenat"] is True
     assert c.put("/api/streamers/enabled", json={"enabled": {"nao_existe": True}}).status_code == 404
 
 
 def test_achados_entram_depois_dos_fixos_e_saem_quando_esfriam(tmp_path, monkeypatch):
     from clipador import discover as dc
     r = _runner(tmp_path)
+    r.settings.discover_langs = ["pt", "en", "es"]
     found = [dc.Found("twitch", "ohnepixel", "ohnePixel", 49000, "en"), dc.Found("kick", "luken", "luken", 5400, "es")]
     monkeypatch.setattr(dc, "discover_all", lambda: list(found))
     r.refresh_discovered(now=1000.0)

@@ -87,7 +87,9 @@ def _finish(streamer: Streamer, workdir: Path, tr: Transcript, peak_offset: floa
     """Com o source.mp4 e a transcrição do clipe prontos: tradução → legenda → textos → render → banco."""
     t0 = t0 or time.time()
     is_pt = tr.lang.startswith("pt") if tr.lang else streamer.is_pt
-    tr_pt = tr if is_pt else translate_transcript(tr, settings.groq_text_model)
+    # live em PT: traduz só o que estiver em inglês/espanhol (NPC, gringo na call); gringo: traduz tudo
+    src = tr if tr.lang else Transcript("pt" if is_pt else "", tr.segments)
+    tr_pt = translate_transcript(src, settings.groq_text_model)
     (workdir / "transcript.json").write_text(json.dumps(
         {"original": tr.to_json(), "pt": tr_pt.to_json()}, ensure_ascii=False, indent=1), encoding="utf-8")
 

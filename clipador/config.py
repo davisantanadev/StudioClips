@@ -78,7 +78,7 @@ class Settings:
     auto_discover: bool = True       # acha sozinho as lives de GTA mais vistas (Twitch, Kick, YouTube)
     discover_min_viewers: int = 3000 # só quem tem pelo menos isso de gente assistindo
     discover_max: int = 8            # quantas lives achadas sozinho no máximo
-    discover_langs: list[str] = field(default_factory=lambda: ["pt", "en", "es"])  # idiomas dos achados
+    discover_langs: list[str] = field(default_factory=lambda: ["pt"])  # achados sozinho: só live em português
     zoom: str = "aberto"       # quanto do jogo aparece: aberto (mais jogo), medio, fechado (jogo enche a tela)
     auto_webcam: bool = True   # acha a webcam sozinho quando ela não foi marcada à mão
     auto_clip: bool = True     # cortes automáticos ligados (o botão Parar/Ligar do painel)

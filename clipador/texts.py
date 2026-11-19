@@ -1,12 +1,14 @@
 """Card (≤2 linhas), título, descrição, hashtags e tradução das legendas — tudo em PT-BR."""
 from __future__ import annotations
 
+import json
 import re
 import textwrap
 from dataclasses import dataclass
 
 from . import ai
 from .ai import Seg, Transcript
+from .lang import is_foreign
 from .selector import CARD_RULES, TITLE_RULES
 
 CARD_MAX_CHARS = 42
@@ -18,8 +20,9 @@ def strip_emoji(s: str) -> str:
 LANG_PT = {"en": "inglês", "es": "espanhol", "de": "alemão", "ru": "russo", "fr": "francês", "pt": "português"}
 
 SYSTEM = (
-    "Você é o editor-chefe do maior canal brasileiro de cortes de GTA 6 (TikTok, Reels, Shorts). "
-    "Escreve como manchete de canal grande: direto, específico, sem narração e sem inventar fatos. "
+    "Você é o admin do maior perfil brasileiro de cortes de GTA 6 (TikTok, Reels, Shorts). "
+    "Escreve como gente: informal, direto, com gíria brasileira, específico e sem inventar fatos. "
+    "Nunca narra em terceira pessoa nem escreve como jornal. "
     "Responde SOMENTE em JSON."
 )
 
@@ -76,9 +79,15 @@ def is_bad_card(lines: list[str], display: str) -> bool:
     return is_generic_card(lines, display) or bool(CRINGE_RE.search(" ".join(lines)))
 
 
+# frase com cara de robô/jornal ("a situação sai do controle", "mostra como a jogabilidade…")
+ROBOT_RE = re.compile(
+    r"a situa[cç][aã]o|mostra como|deixa (todo mundo|todos)|em choque|jogabilidade|de forma inesperada|"
+    r"\bo jogador\b|demonstra|evidencia|imprevis[ií]vel|ao conectar|protagoniz", re.I)
+
+
 def _drop_cringe_sentences(text: str) -> str:
-    parts = re.split(r"(?<=[.!?])\s+", text.strip())
-    return " ".join(p for p in parts if p and not CRINGE_RE.search(p)).strip()
+    parts = re.split(r"(?<=[.!?])\s+|(?<=[\U0001F000-\U0001FAFF])\s+", text.strip())
+    return " ".join(p for p in parts if p and not CRINGE_RE.search(p) and not ROBOT_RE.search(p)).strip()
 
 
 def polish_title(title: str, card: list[str], display: str) -> str:
@@ -182,14 +191,16 @@ def refine_card(frames: list[bytes], display: str, transcript_pt: str, draft: li
         f"Fala no corte (PT-BR): \"\"\"{transcript_pt[:1500] or '(sem fala)'}\"\"\"\n"
         f"Chat: {chat or '-'}\n"
         f"Rascunho do card: {draft}  |  Título: {title or '-'}\n\n"
-        "Junte o que você VÊ nas imagens com o que é FALADO e escreva o card definitivo. "
+        "Junte o que você VÊ nas imagens com o que é FALADO e escreva o card definitivo, no tom informal de "
+        "página de cortes (pode usar a fala do streamer entre aspas), nunca narrando em terceira pessoa. "
         "Cite detalhes concretos que aparecem (veículo, lugar, arma, polícia, explosão, perseguição...) "
         "só se estiverem nas imagens ou na fala. Não invente motivo nem intenção (\"para fugir\", "
         "\"pra se vingar\") que ninguém falou: descreva o que acontece, não o que você supõe.\n"
         + CARD_RULES.replace("{d}", display) + "\n"
         'Responda JSON: {"card": ["linha 1", "linha 2"]}'
     )
-    j = ai.chat_json("Você é editor de cortes virais de GTA no Brasil. Responde só JSON.", user, model,
+    j = ai.chat_json("Você é admin de perfil de cortes virais de GTA no Brasil: escreve informal, com gíria. "
+                     "Responde só JSON.", user, model,
                      temperature=0.3, images=frames)
     if not isinstance(j, dict):
         return None
@@ -199,20 +210,66 @@ def refine_card(frames: list[bytes], display: str, transcript_pt: str, draft: li
     return card
 
 
-def translate_transcript(t: Transcript, model: str) -> Transcript:
-    """Traduz cada segmento pro PT-BR mantendo os tempos. Se falhar, devolve o original."""
-    if not t.segments or t.lang.startswith("pt"):
-        return t
-    payload = [{"i": i, "texto": s.text} for i, s in enumerate(t.segments)]
-    user = (f"Traduza do {LANG_PT.get(t.lang, t.lang)} para português do Brasil, natural e falado "
-            "(gírias de live são bem-vindas), sem explicar nada. Mantenha o mesmo número de itens. "
-            'Responda {"itens": [{"i": 0, "texto": "..."}]}.\n' + str(payload))
-    j = ai.chat_json("Você é tradutor de legendas. Responde só JSON.", user, model, temperature=0.3)
+TRANSLATE_SYSTEM = (
+    "Você legenda cortes de live pra brasileiro no TikTok/Reels/Shorts. Traduz a fala pro português do Brasil "
+    "do jeito que um brasileiro falaria AO VIVO, não como tradução de livro. Responde só JSON."
+)
+TRANSLATE_RULES = (
+    "REGRAS:\n"
+    "- Primeira pessoa, igual ao original: quem fala é o próprio streamer. \"I died\" = \"eu morri\", nunca "
+    "\"ele morreu\". Nada de terceira pessoa, nada de narrar ou explicar.\n"
+    "- Informal e falado: tá, tô, pra, cê, né, tipo. Gíria de live quando combinar: mano, véi, caraca, "
+    "nem a pau, que isso, tá ligado, bora, mó. Palavrão vira o palavrão brasileiro equivalente "
+    "(\"what the fuck\" = \"que porra é essa\", \"bro\" = \"mano\", \"no way\" = \"nem fodendo\"/\"não acredito\").\n"
+    "- Curto e direto como se fala; pode cortar repetição e \"uh\", \"like\". Não traduz nome de pessoa, "
+    "lugar ou carro do jogo.\n"
+    "- Mesmo número de itens e mesmo \"i\" de cada um.\n"
+)
+
+
+def _even_words(seg: Seg, text: str) -> list:
+    """Palavras com tempo espalhado no trecho (pro karaokê mostrar a frase traduzida)."""
+    from .ai import Word
+    parts = text.split()
+    if not parts:
+        return []
+    step = (seg.end - seg.start) / len(parts)
+    return [Word(seg.start + i * step, seg.start + (i + 1) * step, w) for i, w in enumerate(parts)]
+
+
+def _ask_translation(items: list[tuple[int, str]], lang: str, model: str) -> dict[int, str]:
+    payload = [{"i": i, "texto": txt} for i, txt in items]
+    src = LANG_PT.get(lang, "inglês/espanhol") if lang else "inglês/espanhol"
+    user = (f"Traduza do {src} pro português do Brasil.\n" + TRANSLATE_RULES +
+            'Responda {"itens": [{"i": 0, "texto": "..."}]}.\n' + json.dumps(payload, ensure_ascii=False))
+    j = ai.chat_json(TRANSLATE_SYSTEM, user, model, temperature=0.4)
     try:
-        items = {int(x["i"]): str(x["texto"]).strip() for x in j["itens"]}
-    except (TypeError, KeyError, ValueError):
+        return {int(x["i"]): str(x["texto"]).strip() for x in j["itens"] if str(x.get("texto", "")).strip()}
+    except (TypeError, KeyError, ValueError, AttributeError):
+        return {}
+
+
+def translate_transcript(t: Transcript, model: str) -> Transcript:
+    """Legenda em PT-BR natural, mantendo os tempos.
+    - Fala em outro idioma (Kai Cenat, IShowSpeed…): traduz tudo.
+    - Fala em português: traduz só os trechos em inglês/espanhol (NPC do jogo, gringo na call).
+    Se a IA devolver faltando trecho, pede de novo só o que faltou; se falhar de vez, devolve o original."""
+    if not t.segments:
         return t
-    if len(items) != len(t.segments):
+    is_pt = t.lang.startswith("pt")
+    todo = [(i, s.text) for i, s in enumerate(t.segments) if not is_pt or is_foreign(s.text)]
+    if not todo:
         return t
-    segs = [Seg(s.start, s.end, items.get(i) or s.text) for i, s in enumerate(t.segments)]
+    got = _ask_translation(todo, "" if is_pt else t.lang, model)
+    missing = [(i, txt) for i, txt in todo if i not in got]
+    if missing:
+        got.update(_ask_translation(missing, "" if is_pt else t.lang, model))
+    if not got or (not is_pt and len(got) < len(todo)):
+        return t
+    segs = []
+    for i, s in enumerate(t.segments):
+        if i in got:
+            segs.append(Seg(s.start, s.end, got[i], _even_words(s, got[i]) if is_pt else []))
+        else:
+            segs.append(s)
     return Transcript("pt", segs)

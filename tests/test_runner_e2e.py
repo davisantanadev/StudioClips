@@ -36,7 +36,7 @@ def test_live_to_clip(tmp_path, monkeypatch):
     monkeypatch.setattr(Recorder, "__init__", lambda self, *a, **k: orig_init(
         self, *a, **{**k, "source_cmd": fake_live_cmd(85)}))
 
-    settings = Settings(data_dir=tmp_path, cooldown_s=120, analysis_after_s=20)
+    settings = Settings(data_dir=tmp_path, cooldown_s=120, analysis_after_s=20, auto_discover=False)  # sem internet
     db.init(tmp_path / "c.db")
     s = Streamer("fake", "Fake", "pt", [ch], webcam=(900, 450, 360, 250))
     r = runner_mod.Runner(settings, [s])

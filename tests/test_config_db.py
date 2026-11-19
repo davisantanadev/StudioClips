@@ -6,13 +6,13 @@ from clipador.config import APP_DIR, Settings, load_config, save_webcam
 
 def test_load_config_has_12_streamers():
     settings, streamers = load_config(APP_DIR / "streamers.yaml")
-    assert len(streamers) >= 35
+    assert len(streamers) >= 20
     assert settings.max_clip_s == 90 and settings.ideal_clip_s == 60
     names = {s.name for s in streamers}
-    assert {"alanzoka", "xqc", "montanablack88", "dona", "yuri22", "loudcoringa"} <= names
-    xqc = next(s for s in streamers if s.name == "xqc")
-    assert {c.platform for c in xqc.channels} == {"kick", "twitch"}
-    assert not xqc.is_pt
+    assert {"alanzoka", "kaicenat", "ishowspeed", "dona", "yuri22", "loudcoringa"} <= names
+    kai = next(s for s in streamers if s.name == "kaicenat")
+    assert {c.platform for c in kai.channels} == {"youtube", "twitch"}
+    assert not kai.is_pt
     assert "#cortesdelive" in settings.base_hashtags
 
 
@@ -64,4 +64,12 @@ def test_lista_padrao_tem_os_canais_certos():
     assert ("kick", "coringa") in by["loudcoringa"]
     assert ("twitch", "loud_coringa") not in by["loudcoringa"]          # esse canal não existe
     assert "eveleone2004" not in by
-    assert len(streamers) >= 35
+    assert len(streamers) >= 20
+
+def test_so_brasileiros_mais_kai_cenat_e_ishowspeed():
+    from clipador.config import DEFAULTS_DIR
+    _, streamers = load_config(DEFAULTS_DIR / "streamers.yaml")
+    gringos = {s.name for s in streamers if s.lang != "pt"}
+    assert gringos == {"kaicenat", "ishowspeed"}
+    settings, _ = load_config(DEFAULTS_DIR / "streamers.yaml")
+    assert settings.discover_langs == ["pt"]             # achados sozinho: só live em português

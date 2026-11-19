@@ -105,3 +105,60 @@ def test_good_title_is_kept_and_normalized():
     assert polish_title("GTA 6: o assalto mais desastroso de Vice City 😂 | Alanzoka", [], "Alanzoka") == \
         "GTA 6: O assalto mais desastroso de Vice City 😂 | Alanzoka"
     assert polish_title("Esse jumpscare ninguém esperava 😱", [], "xQc") == "GTA 6: Esse jumpscare ninguém esperava 😱 | xQc"
+
+
+# ---------- legenda em PT-BR natural e textos sem cara de robô ----------
+def test_fala_em_ingles_no_meio_de_live_brasileira_tambem_e_traduzida(monkeypatch):
+    seen = {}
+
+    def fake(system, user, model, **k):
+        seen["user"] = user
+        return {"itens": [{"i": 1, "texto": "oi, eu te odeio"}]}
+    monkeypatch.setattr(ai, "chat_json", fake)
+    tr = Transcript("pt", [Seg(0, 2, "o cara tá com um arpão"), Seg(2, 4, "Hi, I hate you. I wanna talk to you"),
+                           Seg(4, 6, "ele quer me roubar")])
+    out = translate_transcript(tr, M)
+    assert [s.text for s in out.segments] == ["o cara tá com um arpão", "oi, eu te odeio", "ele quer me roubar"]
+    assert "arpão" not in seen["user"]           # só manda pra IA o que não está em português
+
+
+def test_traducao_mantem_primeira_pessoa_e_girias(monkeypatch):
+    seen = {}
+
+    def fake(system, user, model, **k):
+        seen["prompt"] = system + user
+        return {"itens": [{"i": 0, "texto": "mano, eu morri de novo"}]}
+    monkeypatch.setattr(ai, "chat_json", fake)
+    translate_transcript(Transcript("en", [Seg(0, 1, "bro I died again")]), M)
+    p = seen["prompt"].lower()
+    assert "primeira pessoa" in p and "mano" in p and "terceira pessoa" in p
+
+
+def test_traducao_que_volta_faltando_tenta_de_novo(monkeypatch):
+    calls = []
+
+    def fake(system, user, model, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            return {"itens": [{"i": 0, "texto": "meu deus"}]}          # faltou um
+        return {"itens": [{"i": 0, "texto": "meu deus"}, {"i": 1, "texto": "nem a pau"}]}
+    monkeypatch.setattr(ai, "chat_json", fake)
+    out = translate_transcript(Transcript("en", [Seg(0, 1, "oh my god"), Seg(1, 2, "no way")]), M)
+    assert [s.text for s in out.segments] == ["meu deus", "nem a pau"] and len(calls) == 2
+
+
+def test_textos_pedem_tom_informal_e_proibem_narracao():
+    from clipador.selector import CARD_RULES, TITLE_RULES
+    rules = (CARD_RULES + TITLE_RULES).lower()
+    assert "terceira pessoa" in rules and "informal" in rules
+
+
+def test_descricao_com_cara_de_robo_e_cortada(monkeypatch):
+    monkeypatch.setattr(ai, "chat_json", lambda *a, **k: {
+        "card": ["O ALARME TOCOU", "E O DONO TAVA EM CASA"], "title": "o dono tava em casa 💀",
+        "description": "O alarme tocou e o dono apareceu na hora 💀 A situação sai do controle e deixa todo "
+                       "mundo em choque. A queda mostra como a jogabilidade pode ser imprevisível.",
+        "hashtags": []})
+    t = make_texts("Alanzoka", "twitch", "tocou o alarme", "", [], M)
+    first = t.description.split("\n")[0]
+    assert first == "O alarme tocou e o dono apareceu na hora 💀"

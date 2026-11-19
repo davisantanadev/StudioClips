@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass
 
 from .config import Channel, Streamer
+from .lang import guess_lang  # noqa: F401 (usado aqui e pelos testes)
 from .recorder import GTA_RE, NO_WINDOW
 
 log = logging.getLogger(__name__)
@@ -39,24 +40,6 @@ class Found:
 
 
 # ---------- idioma ----------
-_WORDS = {
-    "pt": {"ao", "vivo", "até", "ate", "jogando", "dia", "zerar", "hoje", "com", "aventura", "continua", "história",
-           "todo", "primeira", "agora", "você", "não", "nao", "é", "continuando", "jogo"},
-    "es": {"en", "directo", "día", "jugando", "hoy", "con", "seguimos", "el", "los", "las", "historia", "desde",
-           "primera", "ahora", "sí", "vamos", "juego"},
-    "en": {"playing", "the", "first", "time", "live", "stream", "day", "full", "game", "walkthrough", "is", "here",
-           "get", "for", "right", "now", "with", "part", "actually", "gameplay"},
-}
-
-
-def guess_lang(title: str) -> str:
-    words = re.findall(r"[a-zà-úñç]+", (title or "").casefold())
-    scores = {lang: sum(w in vocab for w in words) for lang, vocab in _WORDS.items()}
-    best = max(scores, key=scores.get)
-    ties = [k for k, v in scores.items() if v == scores[best]]
-    return best if scores[best] > 0 and len(ties) == 1 else ""
-
-
 _LANG_NAMES = {"portuguese": "pt", "english": "en", "spanish": "es", "german": "de", "russian": "ru",
                "french": "fr", "turkish": "tr", "italian": "it", "arabic": "ar"}
 
@@ -205,7 +188,7 @@ def merge(fixed: list[Streamer], found: list[Found], min_viewers: int, max_n: in
             break
         if f.viewers < min_viewers or (f.platform, f.channel.lower()) in chans or _base(f.display) in names:
             continue
-        if langs and f.lang and f.lang not in langs:
+        if langs and f.lang not in langs:  # idioma desconhecido também fica de fora
             continue
         if auto_name(f.platform, f.channel) in disabled:
             continue

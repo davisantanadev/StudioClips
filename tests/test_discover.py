@@ -130,4 +130,8 @@ def test_so_os_idiomas_escolhidos():
     found = [F("kick", "eray", "Eray", 30000, "tr"), F("kick", "luken", "luken", 5400, "es"),
              F("youtube", "UCq", "Sem idioma", 4000, "")]
     auto = dc.merge(FIXOS, found, min_viewers=3000, max_n=10, langs={"pt", "en", "es"})
-    assert [s.display for s in auto] == ["luken", "Sem idioma"]   # idioma desconhecido entra (o Whisper descobre)
+    assert [s.display for s in auto] == ["luken"]                # idioma desconhecido fica de fora
+
+def test_idioma_desconhecido_fica_de_fora_quando_filtra():
+    found = [F("youtube", "UCq", "Sem idioma", 4000, ""), F("youtube", "UCb", "Br", 4000, "pt")]
+    assert [s.display for s in dc.merge(FIXOS, found, 3000, 10, langs={"pt"})] == ["Br"]

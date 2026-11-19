@@ -66,8 +66,14 @@ O `teste` gera um clipe a partir de um vídeo seu, usando como pico o segundo in
 
 ## Quem ele vigia
 
-- **A lista** (`streamers.yaml`): mais de 40 streamers e youtubers conferidos (Alanzoka, Davy Jones no GameplayRJ, Paulinho o LOKO, Piuzinho, Gaules, Kai Cenat, IShowSpeed…), cada um com os canais dele na Twitch, na Kick e no YouTube.
-- **As lives de GTA mais vistas agora**: de 5 em 5 minutos o Clipador olha a categoria de GTA VI na Twitch e na Kick e as lives de "GTA 6" no YouTube, e vigia também as mais vistas que não estão na lista (até 8, com pelo menos 3.000 pessoas assistindo, em português, inglês ou espanhol). No painel elas aparecem como **🔎 achado sozinho**. Liga/desliga e muda o mínimo em **Ferramentas → Configurações**.
+- **A lista** (`streamers.yaml`): streamers e youtubers **brasileiros** conferidos (Alanzoka, Davy Jones no GameplayRJ, Paulinho o LOKO, Piuzinho, Gaules, Cellbit…) e, de gringo, só o **Kai Cenat** e o **IShowSpeed**, cada um com os canais dele na Twitch, na Kick e no YouTube.
+- **As lives de GTA mais vistas agora**: de 5 em 5 minutos o Clipador olha a categoria de GTA VI na Twitch e na Kick e as lives de "GTA 6" no YouTube, e vigia também as mais vistas que não estão na lista (até 8, com pelo menos 3.000 pessoas assistindo, **só lives em português**). No painel elas aparecem como **🔎 achado sozinho**. Liga/desliga e muda o mínimo em **Ferramentas → Configurações**.
+
+## Legenda e textos em português de verdade
+
+- **Gringo (Kai Cenat, IShowSpeed):** a legenda sai traduzida pro português do jeito que se fala em live, em primeira pessoa e com gíria ("bro what the fuck" vira "mano, que porra é essa").
+- **Live brasileira com fala em inglês no meio** (NPC do jogo, gringo na call): só esses trechos são traduzidos, e o resto fica como foi falado.
+- **Card, título e descrição** saem no tom de perfil de cortes, informal ("GTA 6: morri do nada kkkk 😂"), nunca narrando em terceira pessoa nem com cara de robô ("a situação sai do controle…").
 
 ## O que dispara um corte
 

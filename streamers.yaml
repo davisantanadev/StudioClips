@@ -17,6 +17,7 @@ settings:
   hype_threshold: 3.0
   cooldown_s: 120
   max_per_hour: 6
+  discover_langs: [pt]   # lives achadas sozinho: só em português
   max_live: 12         # quantas lives gravar ao mesmo tempo (cada uma usa ~6-8 Mbps de internet em 1080p)
   require_gta: true
   handle: "@seuperfil"
@@ -150,121 +151,16 @@ streamers:
     channels:
       - {platform: youtube, channel: UC7I9vRncx1-vox41l1A0ACQ}
 
-  # ---------- gringos (legenda traduzida pra PT-BR) ----------
-  - name: xqc
-    display: xQc
-    lang: en
-    channels:
-      - {platform: kick, channel: xqc}
-      - {platform: twitch, channel: xqc}
+  # ---------- gringos (só estes dois; a legenda sai traduzida pra PT-BR) ----------
   - name: kaicenat
     display: Kai Cenat
     lang: en
     channels:
       - {platform: twitch, channel: kaicenat}
       - {platform: youtube, channel: UCvCfpQXRXdJdL07pzTIA6Cw}   # Kai Cenat Live
-  - name: ohnepixel
-    display: ohnePixel
-    lang: en
-    channels:
-      - {platform: twitch, channel: ohnepixel}
-      - {platform: youtube, channel: UC3ti8PjJczdDKHSwk7TESkw}
   - name: ishowspeed
     display: IShowSpeed
     lang: en
     channels:
       - {platform: youtube, channel: UCWsDFcIhY2DBi3GB5uykGXA}
       - {platform: twitch, channel: ishowspeed}
-  - name: caseoh
-    display: CaseOh
-    lang: en
-    channels:
-      - {platform: twitch, channel: caseoh_}
-  - name: theburntpeanut
-    display: TheBurntPeanut
-    lang: en
-    channels:
-      - {platform: twitch, channel: theburntpeanut}
-      - {platform: kick, channel: theburntpeanut}
-  - name: summit1g
-    display: summit1g
-    lang: en
-    channels:
-      - {platform: twitch, channel: summit1g}
-  - name: typicalgamer
-    display: TypicalGamer
-    lang: en
-    channels:
-      - {platform: youtube, channel: "@TypicalGamer"}
-  - name: adinross
-    display: Adin Ross
-    lang: en
-    channels:
-      - {platform: kick, channel: adinross}
-  - name: n3on
-    display: N3on
-    lang: en
-    channels:
-      - {platform: kick, channel: n3on}
-  - name: illojuan
-    display: IlloJuan
-    lang: es
-    channels:
-      - {platform: twitch, channel: illojuan}
-  - name: rubius
-    display: Rubius
-    lang: es
-    channels:
-      - {platform: twitch, channel: rubius}
-  - name: auronplay
-    display: AuronPlay
-    lang: es
-    channels:
-      - {platform: twitch, channel: auronplay}
-  - name: ibai
-    display: Ibai
-    lang: es
-    channels:
-      - {platform: twitch, channel: ibai}
-  - name: thegrefg
-    display: TheGrefg
-    lang: es
-    channels:
-      - {platform: twitch, channel: thegrefg}
-  - name: djmariio
-    display: DjMaRiiO
-    lang: es
-    channels:
-      - {platform: youtube, channel: UCi7TVXyvrIwqeS9tfYD8UDA}
-      - {platform: twitch, channel: djmariio}
-  - name: spreen
-    display: Spreen
-    lang: es
-    channels:
-      - {platform: kick, channel: spreen}
-      - {platform: twitch, channel: elspreen}
-  - name: westcol
-    display: Westcol
-    lang: es
-    channels:
-      - {platform: kick, channel: westcol}
-  - name: trymacs
-    display: Trymacs
-    lang: de
-    channels:
-      - {platform: twitch, channel: trymacs}
-  - name: montanablack88
-    display: MontanaBlack
-    lang: de
-    channels:
-      - {platform: twitch, channel: montanablack88}
-  - name: buster
-    display: Buster
-    lang: ru
-    channels:
-      - {platform: twitch, channel: buster}
-  - name: windah
-    display: Windah Basudara
-    lang: id
-    channels:
-      - {platform: youtube, channel: UCoIiiHof6BJ85PLuLkuxuhw}
