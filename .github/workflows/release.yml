@@ -1,0 +1,56 @@
+# Testa, monta o StudioClips.exe e publica o zip em Releases.
+# Dispara ao subir uma tag v* (ex.: git tag v0.1.0 && git push origin v0.1.0) ou manualmente (Actions → Run).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,build]"
+
+      - name: Testes rápidos
+        run: python -m pytest -q -m "not slow"
+
+      - name: Montar o .exe (com FFmpeg)
+        shell: pwsh
+        run: ./packaging/build.ps1 -Python python
+
+      - name: Conferir o .exe
+        shell: pwsh
+        run: |
+          $exe = "dist/StudioClips/StudioClips.exe"
+          $p = Start-Process $exe -ArgumentList "-m","streamlink","--version" -RedirectStandardOutput sl.txt -Wait -PassThru -NoNewWindow
+          Get-Content sl.txt
+          if ($p.ExitCode -ne 0 -or -not (Select-String -Path sl.txt -Pattern "streamlink")) { throw "streamlink não roda dentro do .exe" }
+          $p = Start-Process $exe -ArgumentList "-m","yt_dlp","--version" -RedirectStandardOutput yt.txt -Wait -PassThru -NoNewWindow
+          Get-Content yt.txt
+          if ($p.ExitCode -ne 0) { throw "yt-dlp não roda dentro do .exe" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudioClips-windows
+          path: dist/StudioClips-windows.zip
+
+      - name: Publicar no Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/StudioClips-windows.zip
+          generate_release_notes: true

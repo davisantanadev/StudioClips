@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Webcams · Clipador GTA 6</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .wrap { display: grid; grid-template-columns: 260px 1fr; gap: 18px; }
+  .list { display: flex; flex-direction: column; gap: 6px; }
+  .list button { justify-content: space-between; width: 100%; }
+  .list button.on { border-color: var(--acc); }
+  .ok { color: var(--ok); font-size: 12px; } .no { color: var(--mut); font-size: 12px; }
+  .stage { position: relative; width: 100%; max-width: 960px; aspect-ratio: 16/9; background: #000 center/contain no-repeat;
+    border-radius: 12px; overflow: hidden; cursor: crosshair; user-select: none; border: 1px solid var(--line); }
+  .stage .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mut); text-align: center; padding: 20px; }
+  .sel { position: absolute; border: 3px solid var(--acc); background: color-mix(in srgb, var(--acc) 18%, transparent);
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.45); pointer-events: none; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+  @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">CLIPADOR <span>GTA 6</span></div>
+  <span class="pill">Configurar webcam</span>
+  <nav><a class="btn ghost" href="/">← Clipes</a></nav>
+</header>
+<main>
+  <p class="hint" style="margin-top:0">Escolha o streamer, pegue um print da live e <b>arraste um retângulo em volta da câmera dele</b>.
+    Isso vira a parte de cima do vídeo. Se ele não usa câmera, clique em “Sem webcam”.</p>
+  <div class="wrap">
+    <div class="box"><h2>Streamers</h2><div class="list" id="list"></div></div>
+    <div class="box">
+      <h2 id="who">Escolha um streamer</h2>
+      <div class="bar">
+        <button id="snap" class="primary" disabled>📸 Pegar print da live</button>
+        <label class="btn">📁 Enviar print/vídeo<input type="file" id="up" accept="image/*,video/*" hidden></label>
+        <button id="save" disabled>💾 Salvar webcam</button>
+        <button id="none" class="ghost" disabled>Sem webcam</button>
+      </div>
+      <div class="stage" id="stage"><div class="placeholder" id="ph">O print aparece aqui.</div></div>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const toast = (m) => { const t = $("#toast"); t.textContent = m; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 2400); };
+const api = async (u, o = {}) => { const r = await fetch(u, { headers: o.body instanceof FormData ? {} : { "Content-Type": "application/json" }, ...o }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || r.statusText); return j; };
+let cur = null, rect = null, streamers = [];
+const stage = $("#stage");
+
+function drawSel() {
+  stage.querySelector(".sel")?.remove();
+  if (!rect) return;
+  const d = document.createElement("div"); d.className = "sel";
+  const W = stage.clientWidth / 1280, H = stage.clientHeight / 720;
+  Object.assign(d.style, { left: rect[0] * W + "px", top: rect[1] * H + "px", width: rect[2] * W + "px", height: rect[3] * H + "px" });
+  stage.appendChild(d);
+}
+async function load() {
+  streamers = await api("/api/streamers");
+  $("#list").innerHTML = streamers.map((s) => `<button data-n="${s.name}" class="${cur?.name === s.name ? "on" : ""}">
+    <span>${s.live ? "🔴 " : ""}${s.display}</span><span class="${s.webcam ? "ok" : "no"}">${s.webcam ? "configurada" : "—"}</span></button>`).join("");
+}
+$("#list").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-n]"); if (!b) return;
+  cur = streamers.find((s) => s.name === b.dataset.n); rect = cur.webcam ? [...cur.webcam] : null;
+  $("#who").textContent = cur.display; ["snap", "save", "none"].forEach((id) => ($("#" + id).disabled = false));
+  stage.style.backgroundImage = `url(/media/snapshots/${cur.name}.png?v=${Date.now()})`;
+  $("#ph").textContent = "Clique em “Pegar print da live” (ele precisa estar ao vivo) ou envie um print.";
+  load(); drawSel();
+});
+const showImg = (url) => { stage.style.backgroundImage = `url(${url})`; $("#ph").textContent = ""; drawSel(); };
+$("#snap").onclick = async () => {
+  $("#snap").disabled = true; $("#ph").textContent = "Pegando print… (até 30s)";
+  try { showImg((await api(`/api/streamers/${cur.name}/snapshot`, { method: "POST" })).url); }
+  catch (e) { $("#ph").textContent = e.message; } finally { $("#snap").disabled = false; }
+};
+$("#up").onchange = async (e) => {
+  const fd = new FormData(); fd.append("file", e.target.files[0]);
+  try { showImg((await api(`/api/streamers/${cur.name}/snapshot-upload`, { method: "POST", body: fd })).url); } catch (err) { toast(err.message); }
+};
+$("#save").onclick = async () => {
+  if (!rect) return toast("Arraste um retângulo em volta da câmera primeiro");
+  await api(`/api/streamers/${cur.name}/webcam`, { method: "PUT", body: JSON.stringify({ rect }) }); toast("Webcam salva ✔"); load();
+};
+$("#none").onclick = async () => {
+  rect = null; drawSel();
+  await api(`/api/streamers/${cur.name}/webcam`, { method: "PUT", body: JSON.stringify({ rect: null }) }); toast("Layout sem webcam salvo"); load();
+};
+let start = null;
+const pos = (e) => { const b = stage.getBoundingClientRect(); return [Math.max(0, Math.min(1280, (e.clientX - b.left) / b.width * 1280)), Math.max(0, Math.min(720, (e.clientY - b.top) / b.height * 720))]; };
+stage.addEventListener("pointerdown", (e) => { if (!cur) return; start = pos(e); stage.setPointerCapture(e.pointerId); });
+stage.addEventListener("pointermove", (e) => { if (!start) return; const p = pos(e);
+  rect = [Math.round(Math.min(start[0], p[0])), Math.round(Math.min(start[1], p[1])), Math.round(Math.abs(p[0] - start[0])), Math.round(Math.abs(p[1] - start[1]))]; drawSel(); });
+stage.addEventListener("pointerup", () => { start = null; if (rect && (rect[2] < 20 || rect[3] < 20)) { rect = null; drawSel(); } });
+window.addEventListener("resize", drawSel);
+load();
+</script>
+</body>
+</html>

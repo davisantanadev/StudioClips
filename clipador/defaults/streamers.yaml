@@ -1,0 +1,105 @@
+# Clipador GTA 6 — lista de streamers e ajustes.
+# O @, a chave do Groq e a nota mínima ficam salvos pelo painel (Ferramentas → Configurações),
+# fora desta pasta: atualizar o Clipador não apaga nada.
+# Cada streamer pode ter vários canais; o sistema grava o que estiver ao vivo.
+
+settings:
+  pre_s: 43            # segundos antes do pico (sem IA)
+  post_s: 15           # segundos depois do pico (sem IA)
+  min_clip_s: 45       # duração mínima do corte
+  max_clip_s: 60       # duração máxima (teto: 60)
+  min_score: 7         # nota mínima da IA (0-10) pra virar clipe
+  hype_threshold: 3.0
+  cooldown_s: 120
+  max_per_hour: 6
+  max_live: 12
+  require_gta: true
+  handle: "@seuperfil"
+  accent: "#FF2E63"
+  card_seconds: 4
+  quality: "1080p60,1080p,936p60,900p60,720p60,720p,best"   # HD: webcam nítida (menos internet: 720p60,720p,480p,best)
+
+streamers:
+  # ---------- BR ----------
+  - name: alanzoka
+    display: Alanzoka
+    lang: pt
+    channels:
+      - {platform: twitch, channel: alanzoka}
+  - name: davyjones
+    display: Davy Jones
+    lang: pt
+    channels:
+      - {platform: twitch, channel: davyjones}
+  - name: bistecone
+    display: Bistecone
+    lang: pt
+    channels:
+      - {platform: twitch, channel: bistecone}
+  - name: cellbit
+    display: Cellbit
+    lang: pt
+    channels:
+      - {platform: twitch, channel: cellbit}
+  - name: blackoutz
+    display: Blackoutz
+    lang: pt
+    channels:
+      - {platform: twitch, channel: blackoutz}
+      - {platform: kick, channel: blackoutz}
+  - name: dona
+    display: Dona
+    lang: pt
+    channels:
+      - {platform: twitch, channel: dona}
+      - {platform: kick, channel: dona}
+  - name: yuri22
+    display: Yuri22
+    lang: pt
+    channels:
+      - {platform: twitch, channel: yuri22}
+      - {platform: kick, channel: yuri22}
+  - name: loudcoringa
+    display: LOUD Coringa
+    lang: pt
+    channels:
+      - {platform: twitch, channel: loud_coringa}
+
+  # ---------- gringos (legenda traduzida pra PT-BR) ----------
+  - name: djmariio
+    display: DjMaRiiO
+    lang: es
+    channels:
+      - {platform: twitch, channel: djmariio}
+  - name: xqc
+    display: xQc
+    lang: en
+    channels:
+      - {platform: kick, channel: xqc}
+      - {platform: twitch, channel: xqc}
+  - name: typicalgamer
+    display: TypicalGamer
+    lang: en
+    channels:
+      - {platform: youtube, channel: "@TypicalGamer"}
+  - name: buster
+    display: Buster
+    lang: ru
+    channels:
+      - {platform: twitch, channel: buster}
+  - name: trymacs
+    display: Trymacs
+    lang: de
+    channels:
+      - {platform: twitch, channel: trymacs}
+  - name: montanablack88
+    display: MontanaBlack
+    lang: de
+    channels:
+      - {platform: twitch, channel: montanablack88}
+  - name: eveleone2004
+    display: eveleone2004
+    lang: en
+    enabled: false   # canal ainda não confirmado
+    channels:
+      - {platform: twitch, channel: eveleone2004}

@@ -1,0 +1,38 @@
+[project]
+name = "clipador"
+version = "0.1.0"
+description = "Clipador ao vivo de lives (GTA 6) — cortes verticais legendados automáticos"
+requires-python = ">=3.10"
+dependencies = [
+  "streamlink>=6.8",
+  "pyyaml>=6",
+  "httpx>=0.27",
+  "websockets>=12",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "python-multipart>=0.0.9",
+  "chat-downloader>=0.2.8",
+  "curl_cffi>=0.7",
+  "yt-dlp>=2024.1",
+  "opencv-python-headless>=4.10",  # acha a webcam (rosto) sozinho
+  "numpy>=1.26",
+  "pywebview>=5; sys_platform == 'win32'",  # janela própria do painel (WebView2), mais leve que o navegador
+]
+
+[project.optional-dependencies]
+local = ["faster-whisper>=1.0"]
+dev = ["pytest>=8"]
+build = ["pyinstaller>=6.10"]
+
+[project.scripts]
+clipador = "clipador.__main__:main"
+
+[tool.setuptools]
+packages = ["clipador", "clipador.chat", "clipador.web", "clipador.web.static", "clipador.defaults"]
+
+[tool.setuptools.package-data]
+"clipador.web" = ["static/*"]
+"clipador.defaults" = ["*.yaml", "*.txt"]
+
+[tool.pytest.ini_options]
+markers = ["slow: testes que usam ffmpeg de verdade"]

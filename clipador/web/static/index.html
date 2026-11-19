@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipador GTA 6</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="logo">CLIPADOR <span>GTA 6</span></div>
+  <nav class="tabsnav" id="nav">
+    <a href="#clips" data-view="clips">Clips <span class="count" id="n-badge">0</span></a>
+    <a href="#live" data-view="live">Ao vivo <span class="count live-count" id="live-badge">0</span></a>
+    <a href="#tools" data-view="tools">Ferramentas</a>
+    <a href="/webcam">Webcams</a>
+  </nav>
+  <span class="pill" id="pill-live">—</span>
+</header>
+
+<main>
+  <div class="alert" id="alert" hidden></div>
+  <!-- ================= CLIPS ================= -->
+  <section class="view" id="view-clips">
+    <div class="toolbar">
+      <div class="seg" id="seg">
+        <button data-f="todo" class="on">Para postar <span class="count" id="n-todo">0</span></button>
+        <button data-f="done">Postados <span class="count" id="n-done">0</span></button>
+        <button data-f="all">Todos</button>
+      </div>
+      <select id="filter"><option value="">Todos os streamers</option></select>
+      <input id="search" type="search" placeholder="Buscar título, card, fala…">
+      <label class="check-all"><input type="checkbox" id="check-all"> Selecionar todos</label>
+    </div>
+
+    <div class="bulkbar" id="bulkbar" hidden>
+      <b id="sel-n">0 selecionados</b>
+      <button class="primary" data-bulk="zip">⬇ Baixar selecionados (.zip)</button>
+      <button data-bulk="posted">✅ Marcar como postados</button>
+      <button data-bulk="unposted">↩ Voltar pra fila</button>
+      <button data-bulk="delete" class="danger">🗑 Excluir</button>
+      <button data-bulk="clear" class="ghost">Limpar seleção</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <div class="empty big" id="grid-empty" hidden>Nenhum clipe aqui ainda. Quando rolar hype numa live, ele aparece sozinho.</div>
+  </section>
+
+  <!-- ================= AO VIVO ================= -->
+  <section class="view" id="view-live" hidden>
+    <div class="box control">
+      <div class="control-head">
+        <div>
+          <h2>Cortes automáticos <span class="state" id="auto-state">—</span></h2>
+          <div class="hint" id="auto-hint">Grava quem estiver ao vivo jogando GTA e corta sozinho quando o chat explode.</div>
+        </div>
+        <button class="big" id="auto-btn" type="button">—</button>
+      </div>
+      <div class="pick-head">
+        <b>Quais streamers clipar</b>
+        <span class="hint" id="pick-count"></span>
+        <button class="ghost mini" type="button" data-pick="all">Todos</button>
+        <button class="ghost mini" type="button" data-pick="none">Nenhum</button>
+      </div>
+      <div class="pick-list" id="pick-list"></div>
+    </div>
+    <div class="top">
+      <div class="box">
+        <h2>Gravando agora <span class="count" id="live-count">0</span></h2>
+        <div class="lives" id="lives"></div>
+        <div class="chips" id="busy"></div>
+      </div>
+      <div class="box">
+        <h2>Atividade</h2>
+        <div class="log tall" id="log"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FERRAMENTAS ================= -->
+  <section class="view" id="view-tools" hidden>
+    <div class="tools">
+      <div class="box">
+        <h2>Configurações</h2>
+        <form id="settings-form">
+          <div class="hint">IA grátis em rodízio: quando uma bate o limite do plano grátis, a próxima assume na hora.
+            Quanto mais chaves, mais clipes sem parar. Deixe vazio pra manter a chave salva.</div>
+          <label class="lbl" for="set-key">Groq (legenda + texto + visão) <span class="hint key-state" data-p="groq"></span>
+            <a class="signup" data-p="groq" target="_blank" rel="noopener">criar chave grátis</a></label>
+          <input id="set-key" name="groq_key" type="password" autocomplete="off" placeholder="gsk_…">
+          <label class="lbl" for="set-cerebras">Cerebras (texto, ~1 milhão de tokens/dia grátis) <span class="hint key-state" data-p="cerebras"></span>
+            <a class="signup" data-p="cerebras" target="_blank" rel="noopener">criar chave grátis</a></label>
+          <input id="set-cerebras" name="cerebras_key" type="password" autocomplete="off" placeholder="csk-… (opcional)">
+          <label class="lbl" for="set-gemini">Google Gemini (texto + visão) <span class="hint key-state" data-p="gemini"></span>
+            <a class="signup" data-p="gemini" target="_blank" rel="noopener">criar chave grátis</a></label>
+          <input id="set-gemini" name="gemini_key" type="password" autocomplete="off" placeholder="AIza… (opcional)">
+          <div class="row"><button type="button" id="test-key">Testar chaves</button><span class="hint" id="test-res"></span></div>
+          <div class="row">
+            <div class="grow"><label class="lbl" for="set-handle">Seu @ (marca d'água)</label>
+              <input id="set-handle" name="handle" maxlength="40" placeholder="@seuperfil"></div>
+            <div><label class="lbl" for="set-score">Nota mínima</label>
+              <input id="set-score" name="min_score" type="number" min="0" max="10" step="0.5" style="width:110px"></div>
+          </div>
+          <div><label class="lbl" for="set-zoom">Zoom do jogo no vídeo</label>
+            <select id="set-zoom" name="zoom">
+              <option value="aberto">Aberto: mostra mais do jogo</option>
+              <option value="medio">Médio</option>
+              <option value="fechado">Fechado: o jogo enche a tela</option>
+            </select></div>
+          <div><label class="lbl" for="set-quality">Qualidade da gravação</label>
+            <select id="set-quality" name="quality">
+              <option value="hd">HD 1080p: webcam nítida (mais internet)</option>
+              <option value="leve">Leve 720p: gasta metade da internet</option>
+            </select></div>
+          <label class="check-inline"><input type="checkbox" name="auto_webcam" id="set-autocam"> Achar a webcam do streamer sozinho</label>
+          <label class="check-inline"><input type="checkbox" name="require_gta" id="set-gta"> Gravar só quando a live for de GTA</label>
+          <button class="primary" type="submit">Salvar</button>
+          <div class="hint" id="saved-in">Fica salvo no seu usuário do Windows: atualizar o Clipador não apaga nada.</div>
+        </form>
+      </div>
+      <div class="box">
+        <h2>Clipar live gravada (VOD)</h2>
+        <form id="vod-form">
+          <input name="url" placeholder="Link da VOD (Twitch, YouTube…)" required>
+          <div class="row">
+            <select name="streamer" class="streamer-select" required></select>
+            <input name="top_n" type="number" min="1" max="20" value="6" style="width:110px" title="Quantos clipes">
+          </div>
+          <button class="primary" type="submit">Achar os melhores momentos</button>
+          <div class="hint">Lê o replay do chat, a IA escolhe os melhores trechos (perto de 1 minuto) e descarta os fracos.</div>
+        </form>
+        <div class="vod-list" id="vod-list"></div>
+      </div>
+      <div class="box">
+        <h2>Testar com um vídeo</h2>
+        <form id="test-form">
+          <input name="file" type="file" accept="video/*" required>
+          <div class="row">
+            <select name="streamer" class="streamer-select" required></select>
+            <input name="peak" type="number" min="0" step="1" value="60" style="width:140px" title="Segundo do momento">
+          </div>
+          <button type="submit">Gerar clipe de teste</button>
+          <div class="hint">Mande um trecho de live (ideal: 2+ minutos) e o segundo aproximado do momento bom.</div>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= VISUALIZADOR ================= -->
+<div class="viewer" id="viewer" hidden>
+  <div class="viewer-bg" data-close></div>
+  <div class="viewer-box">
+    <button class="nav-btn prev" id="v-prev" title="Anterior (←)">‹</button>
+    <div class="viewer-video"><video id="v-video" controls playsinline></video></div>
+    <aside class="viewer-side" id="v-side"></aside>
+    <button class="nav-btn next" id="v-next" title="Próximo (→)">›</button>
+    <button class="close" data-close title="Fechar (Esc)">✕</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

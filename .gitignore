@@ -1,0 +1,28 @@
+# segredos e dados de quem usa (chaves, clipes, gravações, log, banco)
+.env
+.env.*
+!.env.example
+/data/
+/hashtags.txt
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# build do .exe
+build/
+dist/
+build_log.txt
+packaging/ffmpeg/
+*.zip
+
+# editor / sistema
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

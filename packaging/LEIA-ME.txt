@@ -1,0 +1,20 @@
+STUDIOCLIPS - Clipador GTA 6
+============================
+
+1. Descompacte esta pasta onde quiser (ex.: C:\StudioClips). Nao rode de dentro do zip.
+2. De dois cliques em StudioClips.exe. O painel abre numa janela propria.
+   - Se o Windows mostrar "O Windows protegeu o computador", clique em "Mais informacoes" > "Executar assim mesmo"
+     (o app nao e assinado digitalmente).
+3. No painel, va em Ferramentas > Configuracoes:
+   - cole a sua chave GRATIS do Groq (https://console.groq.com > API Keys > Create API Key) e clique em Testar;
+   - coloque o seu @ (vai como marca d'agua nos clipes).
+   A chave e os ajustes ficam em %APPDATA%\ClipadorGTA6 (atualizar o app nao apaga).
+
+- Fechar a janela desliga tudo (gravacoes e edicoes).
+- Os clipes ficam em data\clips, nesta pasta. Apague os antigos de vez em quando.
+- A lista de streamers fica em streamers.yaml, nesta pasta (abra com o Bloco de Notas).
+- O FFmpeg ja vem junto (pasta ffmpeg). Licenca dele em ffmpeg\FFmpeg-LICENSE.
+
+Pelo terminal (cmd, na pasta do app):
+  start /wait StudioClips.exe status
+  start /wait StudioClips.exe vod https://www.twitch.tv/videos/123456 -s alanzoka -n 8
