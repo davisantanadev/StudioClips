@@ -73,3 +73,10 @@ def test_so_brasileiros_mais_kai_cenat_e_ishowspeed():
     assert gringos == {"kaicenat", "ishowspeed"}
     settings, _ = load_config(DEFAULTS_DIR / "streamers.yaml")
     assert settings.discover_langs == ["pt"]             # achados sozinho: só live em português
+
+def test_por_padrao_so_clipa_quem_esta_na_lista():
+    from clipador.config import DEFAULTS_DIR
+    settings, streamers = load_config(DEFAULTS_DIR / "streamers.yaml")
+    assert settings.auto_discover is False
+    luan = next(s for s in streamers if s.name == "luanz7")
+    assert ("kick", "luanz7") in {(c.platform, c.channel) for c in luan.channels} and luan.is_pt

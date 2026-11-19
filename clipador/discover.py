@@ -197,6 +197,25 @@ def merge(fixed: list[Streamer], found: list[Found], min_viewers: int, max_n: in
     return out
 
 
+# ---------- canal pelo link (Adicionar streamer) ----------
+def parse_channel_url(text: str) -> Channel | None:
+    """Link do canal (Twitch, Kick, YouTube @handle ou /channel/UC…) → Channel. None se não for link de canal."""
+    u = (text or "").strip()
+    if m := re.fullmatch(r"@([\w.-]{2,})", u):
+        return Channel("youtube", "@" + m.group(1))
+    if m := re.search(r"youtube\.com/(@[\w.-]+)", u):
+        return Channel("youtube", m.group(1))
+    if m := re.search(r"youtube\.com/channel/(UC[\w-]{22})", u):
+        return Channel("youtube", m.group(1))
+    if m := re.search(r"twitch\.tv/([A-Za-z0-9_]{2,25})(?:[/?#]|$)", u):
+        login = m.group(1).lower()
+        return None if login in ("videos", "directory", "settings", "p", "search") else Channel("twitch", login)
+    if m := re.search(r"kick\.com/([A-Za-z0-9_-]{2,})(?:[/?#]|$)", u):
+        slug = m.group(1).lower()
+        return None if slug in ("video", "categories", "browse", "search") else Channel("kick", slug)
+    return None
+
+
 # ---------- VOD: de quem é o link ----------
 def vod_ref(url: str) -> tuple[str, str] | None:
     u = url or ""

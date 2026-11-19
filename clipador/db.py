@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS clips (
   lang TEXT NOT NULL DEFAULT '',
   duration REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pronto',
-  posted INTEGER NOT NULL DEFAULT 0
+  posted INTEGER NOT NULL DEFAULT 0,
+  deleted_at REAL NOT NULL DEFAULT 0
 );
 """
 
@@ -52,6 +53,7 @@ class Clip:
     status: str = "pronto"
     posted: bool = False
     created_at: float = field(default_factory=time.time)
+    deleted_at: float = 0.0  # > 0 = está na Lixeira (arquivos continuam no disco)
     id: int | None = None
 
     def to_json(self) -> dict:
@@ -64,6 +66,9 @@ def init(path: Path | str) -> None:
     _path.parent.mkdir(parents=True, exist_ok=True)
     with _conn() as c:
         c.executescript(SCHEMA)
+        cols = {r[1] for r in c.execute("PRAGMA table_info(clips)")}
+        if "deleted_at" not in cols:  # banco de versão antiga: ganha a Lixeira sem perder nada
+            c.execute("ALTER TABLE clips ADD COLUMN deleted_at REAL NOT NULL DEFAULT 0")
 
 
 def _conn() -> sqlite3.Connection:
@@ -102,8 +107,8 @@ def get_clip(clip_id: int) -> Clip | None:
     return _row(r) if r else None
 
 
-def list_clips(posted: bool | None = None, streamer: str | None = None) -> list[Clip]:
-    q, args = "SELECT * FROM clips WHERE 1=1", []
+def list_clips(posted: bool | None = None, streamer: str | None = None, trash: bool = False) -> list[Clip]:
+    q, args = "SELECT * FROM clips WHERE " + ("deleted_at > 0" if trash else "deleted_at = 0"), []
     if posted is not None:
         q += " AND posted=?"
         args.append(int(posted))
@@ -132,6 +137,21 @@ def mark_posted(clip_id: int, posted: bool = True) -> None:
     update_clip(clip_id, posted=posted)
 
 
+def trash_clip(clip_id: int) -> None:
+    """Manda pra Lixeira: some da lista, mas o vídeo e os textos continuam (dá pra restaurar)."""
+    update_clip(clip_id, deleted_at=time.time())
+
+
+def restore_clip(clip_id: int) -> None:
+    update_clip(clip_id, deleted_at=0)
+
+
+def known_workdirs() -> set[str]:
+    with _conn() as c:
+        return {r[0] for r in c.execute("SELECT workdir FROM clips")}
+
+
 def delete_clip(clip_id: int) -> None:
+    """Remove o registro de vez (só pra quem já está na Lixeira e o usuário mandou apagar)."""
     with _lock, _conn() as c:
         c.execute("DELETE FROM clips WHERE id=?", (clip_id,))

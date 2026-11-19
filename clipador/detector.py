@@ -165,7 +165,8 @@ class HypeDetector:
                     "risada" if laugh >= LAUGH_SHARE and laugh >= shock else
                     "susto/choque" if shock >= SHOCK_SHARE else "grito" if scream >= SCREAM_Z else "")
             signals = {"kind": kind, "laugh": round(laugh, 2), "shock": round(shock, 2),
-                       "scream": round(scream, 1), "chat_z": round(z, 1), "rate": round(rate, 1), "clips": clips}
+                       "scream": round(scream, 1), "chat_z": round(z, 1), "rate": round(rate, 1), "clips": clips,
+                       "score": round(score, 2)}
             self._recent.append((t, score, signals))
         self._closed_upto = max(self._closed_upto, cur - 1)
 

@@ -70,6 +70,7 @@ def test_api_auto_and_enabled_are_saved(tmp_path):
 def test_achados_entram_depois_dos_fixos_e_saem_quando_esfriam(tmp_path, monkeypatch):
     from clipador import discover as dc
     r = _runner(tmp_path)
+    r.settings.auto_discover = True
     r.settings.discover_langs = ["pt", "en", "es"]
     found = [dc.Found("twitch", "ohnepixel", "ohnePixel", 49000, "en"), dc.Found("kick", "luken", "luken", 5400, "es")]
     monkeypatch.setattr(dc, "discover_all", lambda: list(found))
@@ -93,3 +94,27 @@ def test_descoberta_desligada_nao_procura(tmp_path, monkeypatch):
     monkeypatch.setattr(dc, "discover_all", lambda: (_ for _ in ()).throw(AssertionError("não devia procurar")))
     r.refresh_discovered(now=1000.0)
     assert not any(s.auto for s in r.streamers.values())
+
+def test_fila_atende_o_momento_mais_forte_primeiro_e_descarta_o_mais_fraco():
+    from clipador.runner import Job, JobQueue
+    q = JobQueue(max_pending=3)
+    w = FakeWorker()
+    fraco, medio, forte = (Job(w, 1.0, signals={"score": s}) for s in (3.1, 4.5, 7.9))
+    manual = Job(w, 2.0, manual=True)
+    assert q.put(fraco) is None and q.put(forte) is None and q.put(medio) is None
+    dropped = q.put(manual)                     # encheu: sai o mais fraco
+    assert dropped is fraco and q.qsize() == 3
+    assert q.get(timeout=0.1) is manual         # "Cortar agora" passa na frente
+    assert q.get(timeout=0.1) is forte
+    assert q.get(timeout=0.1) is medio
+    assert q.get(timeout=0.05) is None
+
+
+def test_clipes_da_twitch_tem_prioridade_alta():
+    from clipador.runner import Job, JobQueue
+    q = JobQueue(max_pending=5)
+    w = FakeWorker()
+    hype = Job(w, 1.0, signals={"score": 9.0})
+    clipado = Job(w, 1.0, signals={"kind": "clipado na Twitch", "twitch_clips": 3})
+    q.put(hype), q.put(clipado)
+    assert q.get(timeout=0.1) is clipado

@@ -35,6 +35,11 @@ def _setup():
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("streamlink").setLevel(logging.ERROR)
     db.init(settings.data_dir / "clipes.db")
+    try:  # clipe que ficou no disco mas saiu da lista volta pra Lixeira (nunca some sem você decidir)
+        from .recover import recover_orphans
+        recover_orphans(settings.data_dir, {s.name: s.display for s in streamers})
+    except Exception:
+        logging.exception("recuperação de clipes")
     if not any_key("text"):
         logging.warning("⚠ sem chave do Groq — cole no painel (Ferramentas → Configurações). "
                         "Sem ela a IA não escolhe os cortes e o card sai genérico")
@@ -119,6 +124,7 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--sem-navegador", action="store_true")
     pn = sub.add_parser("painel")
     pn.add_argument("--sem-navegador", action="store_true")
+    pn.add_argument("--porta", type=int, default=None, help="porta do painel (padrão: a das configurações)")
     sub.add_parser("status")
     v = sub.add_parser("vod")
     v.add_argument("url")
@@ -155,6 +161,8 @@ def main(argv: list[str] | None = None) -> None:
         finally:
             runner.stop()
     elif cmd == "painel":
+        if a.porta:
+            settings.port = a.porta
         _serve(settings, None, not a.sem_navegador)
     elif cmd == "status":
         from .recorder import probe

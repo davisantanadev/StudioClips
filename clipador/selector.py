@@ -23,6 +23,7 @@ SYSTEM = (
 VIRAL_RULES = (
     "O QUE VIRALIZA (só isso merece nota alta):\n"
     "- MUITO ENGRAÇADO: piada, falha ridícula, bug absurdo, NPC fazendo besteira, streamer chorando de rir; "
+    "RISADA CONTAGIANTE (o streamer ou alguém da call rachando de rir, crise de riso) já vale nota alta; "
     "o chat enche de KKKK/KEKW.\n"
     "- SUSTO / JUMPSCARE: o streamer pula, grita, se assusta de verdade.\n"
     "- AÇÃO INTENSA: perseguição, tiroteio, explosão, fuga de 5 estrelas, acidente absurdo, morte inesperada, "
@@ -35,7 +36,8 @@ VIRAL_RULES = (
 
 TONE_RULES = (
     "TOM (vale pro card, título e descrição): português do Brasil INFORMAL, do jeito que o admin de uma página "
-    "grande de cortes escreve, ou usando a fala mais forte do próprio streamer (traduzida, se for gringo). "
+    "grande de cortes escreve, ou usando a fala mais forte do próprio streamer. TUDO em português: fala em "
+    "inglês/espanhol citada no card ou no título vai TRADUZIDA (\"oh my god no way\" vira \"MEU DEUS, NÃO\"). "
     "Pode falar com quem assiste (\"espera o final\", \"olha isso\") e usar gíria (mano, véi, KKKK, deu ruim, "
     "do nada). NUNCA terceira pessoa narrando (\"{d} faz X\", \"ele tenta…\", \"o jogador…\") e NUNCA tom de "
     "jornal ou de robô (\"a situação sai do controle\", \"mostra como\", \"deixa todo mundo em choque\", "
@@ -54,12 +56,21 @@ CARD_RULES = (
 )
 
 TITLE_RULES = (
-    "TÍTULO DO POST (aparece cortado depois de ~60 caracteres): começa com \"GTA 6\", depois o gancho do jeito "
-    "que você contaria pro amigo no zap, e termina com \"| {d}\". Até 1 emoji que combine (😂 risada, 😱 susto, "
-    "🔥 ação, 💀 falha). Ex.: \"GTA 6: o dono da casa tava lá dentro 💀 | {d}\", \"GTA 6: fugiu da polícia de "
-    "bicicleta kkkk 😂 | {d}\", \"GTA 6: esse susto foi real 😱 | {d}\".\n"
-    "DESCRIÇÃO: 1 ou 2 frases curtas e informais, como legenda de post (pode falar com quem assiste). "
-    "Ex.: \"Mano, o cara tava DENTRO de casa 💀 Espera o final.\". Nada de explicar o jogo nem narrar.\n"
+    "TÍTULO DO POST (até ~70 caracteres, aparece cortado depois de ~60): VARIE o formato de um clipe pro outro, "
+    "nada de molde fixo. Use o que combinar com o momento:\n"
+    "  pergunta: \"Quem deixou ele dirigir?? 😂\"\n"
+    "  fala do streamer entre aspas: \"\\\"EU NÃO ACREDITO NISSO\\\" 💀\"\n"
+    "  POV: \"POV: você confia no {d} no GTA 6 🚗\"\n"
+    "  reação: \"Mano, a polícia chegou em 3 segundos 😭\"\n"
+    "  curiosidade: \"Ninguém sabia que dava pra fazer isso no GTA 6 🤯\"\n"
+    "Pode citar {d} ou \"GTA 6\" quando ficar natural, não é obrigatório. Até 1 emoji que combine.\n"
+    "DESCRIÇÃO: 2 ou 3 frases curtas e informais, cada uma com função diferente: (1) o gancho, falando com quem "
+    "assiste; (2) uma curiosidade ou o detalhe mais engraçado do momento — SÓ fato que está na fala, no chat ou "
+    "nas imagens (o que alguém falou, o que deu errado, quem rachou de rir). NUNCA invente mecânica, recurso, "
+    "regra do jogo ou motivo; se não tiver nada assim, pule essa frase. Não use sempre o rótulo \"Curiosidade:\" "
+    "(varie: \"detalhe:\", \"repara que…\", \"e o pior…\", ou sem rótulo); (3) uma pergunta pra galera comentar, "
+    "diferente a cada post. Ex.: \"Mano, o cara tava DENTRO de casa 💀 E o pior: ele ainda tentou se esconder "
+    "no armário. Você teria fugido ou encarado?\".\n"
     "HASHTAGS: 3 a 4 bem específicas do que acontece no corte, em PT-BR quando fizer sentido "
     "(ex.: #perseguicao, #jumpscare, #fail, #assalto, #humor, #vicecity). Sem #GTA6 (já entra sozinha)."
 )
@@ -150,7 +161,8 @@ def _pick(j: dict) -> dict | None:
 
 def select_moment(t: Transcript, chat: list[tuple[float, str]], peak: float, total: float, *,
                   display: str, live_title: str, min_s: float, max_s: float, model: str,
-                  signals: str = "", ideal_s: float | None = None) -> Selection:
+                  signals: str = "", ideal_s: float | None = None,
+                  recent_titles: list[str] | None = None) -> Selection:
     """`peak`, tempos do chat e da transcrição: segundos dentro da janela de análise.
     `signals`: o que o detector viu (risada no chat, susto, grito no áudio)."""
     fala = fala_text(t)
@@ -179,7 +191,9 @@ def select_moment(t: Transcript, chat: list[tuple[float, str]], peak: float, tot
         "  5-6: tem algo, mas fraco, lento ou depende de contexto;\n"
         "  0-4: momento aleatório / lista do que NÃO SERVE acima.\n"
         + CARD_RULES.replace("{d}", display) + "\n"
-        + TITLE_RULES.replace("{d}", display) + "\n\n"
+        + TITLE_RULES.replace("{d}", display) + "\n"
+        + ("TÍTULOS QUE JÁ SAÍRAM (não repita o formato nem as palavras de abertura): "
+           + " | ".join(recent_titles[:8]) + "\n" if recent_titles else "") + "\n"
         "Responda JSON:\n"
         '{"candidatos": [{"inicio": seg, "fim": seg, "nota": 0-10, '
         '"tipo": "engraçado|susto|ação|raiva|fraco", '

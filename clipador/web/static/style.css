@@ -33,6 +33,9 @@ header nav { display: flex; gap: 6px; margin-left: auto; }
 .pill { font-size: 12px; color: var(--mut); border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); display: inline-block;
   box-shadow: 0 0 0 0 var(--acc); animation: pulse 1.6s infinite; }
+.add-streamer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.add-streamer .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.add-streamer .grow { flex: 1; min-width: 220px; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 /* janela minimizada / aba escondida: nada animando à toa */
 .is-hidden *, .is-hidden *::before, .is-hidden *::after { animation-play-state: paused !important; }

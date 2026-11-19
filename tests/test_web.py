@@ -60,8 +60,9 @@ def test_bulk_zip_posted_delete(tmp_path):
     assert f"Alanzoka_{a}/Alanzoka_{a}.mp4" in names and f"Alanzoka_{b}/post.txt" in names
     c.post("/api/clips/bulk-posted", json={"ids": [a], "posted": True})
     assert db.get_clip(a).posted and not db.get_clip(b).posted
-    assert c.post("/api/clips/bulk-delete", json={"ids": [a, b]}).json()["deleted"] == 2
-    assert db.list_clips() == []
+    assert c.post("/api/clips/bulk-delete", json={"ids": [a, b]}).json()["trashed"] == 2
+    assert db.list_clips() == [] and len(db.list_clips(trash=True)) == 2      # foram pra Lixeira
+    assert (tmp_path / "w" / "final.mp4").exists()
 
 
 def test_settings_saved_outside_app_and_applied(tmp_path):
@@ -142,6 +143,33 @@ def test_vod_sem_dono_reconhecido_pede_pra_escolher(tmp_path, monkeypatch):
 
 def test_ligar_e_desligar_descoberta_no_painel(tmp_path):
     s, c = _client(tmp_path)
-    assert c.get("/api/settings").json()["auto_discover"] is True
-    r = c.put("/api/settings", json={"auto_discover": False, "discover_min_viewers": 10000}).json()
-    assert r["auto_discover"] is False and r["discover_min_viewers"] == 10000 and s.auto_discover is False
+    assert c.get("/api/settings").json()["auto_discover"] is False      # padrão: só quem está na lista
+    r = c.put("/api/settings", json={"auto_discover": True, "discover_min_viewers": 10000}).json()
+    assert r["auto_discover"] is True and r["discover_min_viewers"] == 10000 and s.auto_discover is True
+
+def test_link_do_canal_vira_canal():
+    from clipador.discover import parse_channel_url as p
+    from clipador.config import Channel
+    assert p("https://www.twitch.tv/LuanZ7") == Channel("twitch", "luanz7")
+    assert p("twitch.tv/piuzinho?sr=a") == Channel("twitch", "piuzinho")
+    assert p("https://kick.com/gabepeixe") == Channel("kick", "gabepeixe")
+    assert p("https://www.youtube.com/@PaulinhoLOKOoficial/live") == Channel("youtube", "@PaulinhoLOKOoficial")
+    assert p("https://youtube.com/channel/UCdlJx-w37viXFNq__qZ7ARQ") == Channel("youtube", "UCdlJx-w37viXFNq__qZ7ARQ")
+    assert p("@luanz7") == Channel("youtube", "@luanz7")
+    assert p("https://www.twitch.tv/videos/123") is None and p("oi") is None
+
+
+def test_adicionar_streamer_pelo_painel(tmp_path):
+    from clipador.config import extra_streamers_path
+    _, c = _client(tmp_path)
+    r = c.post("/api/streamers", json={"display": "Fulano Gamer",
+                                       "links": "https://www.twitch.tv/fulanogamer https://kick.com/fulanogamer"})
+    assert r.status_code == 200 and r.json()["name"] == "fulanogamer"
+    got = {x["name"]: x for x in c.get("/api/streamers").json()}
+    assert {ch["platform"] for ch in got["fulanogamer"]["channels"]} == {"twitch", "kick"}
+    assert got["fulanogamer"]["extra"] is True and got["alanzoka"]["extra"] is False
+    assert extra_streamers_path().exists()                                  # salvo fora da pasta do app
+    assert c.post("/api/streamers", json={"display": "X", "links": "nada"}).status_code == 400
+    assert c.delete("/api/streamers/fulanogamer").status_code == 200        # quem você pôs, você tira
+    assert "fulanogamer" not in {x["name"] for x in c.get("/api/streamers").json()}
+    assert c.delete("/api/streamers/alanzoka").status_code == 400           # os da lista padrão não

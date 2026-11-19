@@ -34,7 +34,7 @@ def test_process_clip_foreign_end_to_end(tmp_path, monkeypatch):
     assert clip.transcript == "meu deus, não acredito"
     assert (tmp_path / clip.video_path).exists() and (tmp_path / clip.cover_path).exists()
     assert "Phrase" in (tmp_path / clip.workdir / "subs.ass").read_text(encoding="utf-8")
-    assert db.list_clips()[0].title == "GTA 6: xQc no GTA 6 😂 | xQc"
+    assert db.list_clips()[0].title == "XQc no GTA 6 😂" or db.list_clips()[0].title == "xQc no GTA 6 😂"
 
     new = pipeline.rerender_card(clip.id, ["Card editado", "na mão"], settings)
     assert new.card == ["Card editado", "na mão"]
@@ -67,9 +67,24 @@ def test_candidate_ai_picks_segment_and_rejects_weak(tmp_path, monkeypatch):
     clip = pipeline.process_candidate(s, make_video(tmp_path / "an.mp4", 80), 50, settings, platform="twitch",
                                       chat=[(50, "KEKW")] * 20)
     assert clip.card == ["QUEDA DO PRÉDIO", "MAIS ABSURDA DE VICE CITY"]
-    assert clip.title == "GTA 6: Que queda 😂 | Alanzoka"
+    assert clip.title == "Que queda 😂"
     assert 40 <= clip.duration <= 60
     assert clip.transcript.startswith("frase 20")
     nota["v"] = 3
     assert pipeline.process_candidate(s, make_video(tmp_path / "an2.mp4", 80), 50, settings) is None
     assert len(db.list_clips()) == 1
+
+
+def test_ia_sem_cota_pula_o_momento_em_vez_de_clipe_generico(tmp_path, monkeypatch):
+    """Com chave, mas a IA no limite: não monta clipe com texto padrão (era o "melhores momentos da live")."""
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    settings = Settings(data_dir=tmp_path)
+    db.init(tmp_path / "c.db")
+    monkeypatch.setattr(pipeline, "transcribe", lambda *a, **k: Transcript("pt", [Seg(0, 4, "oi", [])]))
+    monkeypatch.setattr(ai, "chat_json", lambda *a, **k: None)
+    notes = []
+    s = Streamer("alanzoka", "Alanzoka", "pt", [Channel("twitch", "alanzoka")])
+    assert pipeline.process_candidate(s, make_video(tmp_path / "an.mp4", 80), 50, settings, note=notes.append) is None
+    assert db.list_clips() == [] and any("IA" in n for n in notes)
+    # apertou "Cortar agora": aí faz mesmo assim
+    assert pipeline.process_candidate(s, make_video(tmp_path / "an2.mp4", 80), 50, settings, manual=True) is not None

@@ -95,16 +95,34 @@ def test_cringe_card_and_title_are_cleaned(monkeypatch):
         "hashtags": ["#fuga", "#chat"]})
     t = make_texts("Cellbit", "twitch", "caramba", "", [], M)
     assert t.card == ["Cellbit no GTA 6"]                      # card brega recusado
-    assert t.title.startswith("GTA 6: ") and t.title.endswith("| Cellbit") and "chat" not in t.title.lower()
+    assert t.title and "chat" not in t.title.lower() and "loucura" not in t.title.lower()
     assert "chat" not in t.description.lower() and "Fuga absurda de moto." in t.description
     assert t.hashtags[:4] == ["#GTA6", "#GTAVI", "#Cellbit", "#cortes"] and "#chat" not in t.hashtags
 
 
-def test_good_title_is_kept_and_normalized():
+def test_titulo_bom_fica_como_a_ia_escreveu_sem_formato_fixo():
     from clipador.texts import polish_title
-    assert polish_title("GTA 6: o assalto mais desastroso de Vice City 😂 | Alanzoka", [], "Alanzoka") == \
-        "GTA 6: O assalto mais desastroso de Vice City 😂 | Alanzoka"
-    assert polish_title("Esse jumpscare ninguém esperava 😱", [], "xQc") == "GTA 6: Esse jumpscare ninguém esperava 😱 | xQc"
+    assert polish_title("quem deixou ele dirigir?? 😂", [], "Cellbit") == "Quem deixou ele dirigir?? 😂"
+    assert polish_title("\"EU NÃO ACREDITO NISSO\" 💀", [], "Paulinho o LOKO") == "\"EU NÃO ACREDITO NISSO\" 💀"
+    assert polish_title("POV: você confia no Paulinho no GTA 6 🚗", [], "Paulinho") == \
+        "POV: você confia no Paulinho no GTA 6 🚗"
+    assert not polish_title("", ["TOCOU O ALARME", "E O DONO TAVA EM CASA"], "Alanzoka").startswith("GTA 6: ")
+
+
+def test_regras_pedem_variedade_curiosidade_e_risada():
+    from clipador.selector import TITLE_RULES, VIRAL_RULES
+    t = TITLE_RULES.lower()
+    assert "curiosidade" in t and "varie" in t and "pov" in t
+    assert "rachando de rir" in VIRAL_RULES.lower()
+
+
+def test_titulos_recentes_vao_pra_ia_nao_repetir(monkeypatch):
+    from clipador.selector import select_moment
+    seen = {}
+    monkeypatch.setattr(ai, "chat_json", lambda s, u, *a, **k: seen.setdefault("u", u) and None)
+    select_moment(Transcript("pt", [Seg(0, 5, "oi", [])]), [], 3, 10, display="Cellbit", live_title="",
+                  min_s=4, max_s=8, model="x", recent_titles=["Mano, a polícia chegou em 3 segundos 😭"])
+    assert "a polícia chegou em 3 segundos" in seen["u"]
 
 
 # ---------- legenda em PT-BR natural e textos sem cara de robô ----------

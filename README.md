@@ -66,9 +66,21 @@ O `teste` gera um clipe a partir de um vídeo seu, usando como pico o segundo in
 
 ## Quem ele vigia
 
-- **A lista** (`streamers.yaml`): streamers e youtubers **brasileiros** conferidos (Alanzoka, Davy Jones no GameplayRJ, Paulinho o LOKO, Piuzinho, Gaules, Cellbit…) e, de gringo, só o **Kai Cenat** e o **IShowSpeed**, cada um com os canais dele na Twitch, na Kick e no YouTube.
-- **As lives de GTA mais vistas agora**: de 5 em 5 minutos o Clipador olha a categoria de GTA VI na Twitch e na Kick e as lives de "GTA 6" no YouTube, e vigia também as mais vistas que não estão na lista (até 8, com pelo menos 3.000 pessoas assistindo, **só lives em português**). No painel elas aparecem como **🔎 achado sozinho**. Liga/desliga e muda o mínimo em **Ferramentas → Configurações**.
+- **Só quem está na lista**: streamers e youtubers **brasileiros** conferidos (Alanzoka, Davy Jones no GameplayRJ, Paulinho o LOKO, Piuzinho, LuanZ7, Gaules, Cellbit…) e, de gringo, só o **Kai Cenat** e o **IShowSpeed**, cada um com os canais dele na Twitch, na Kick e no YouTube.
+- **Adicionar alguém**: em **Ao vivo → ➕ Adicionar streamer / youtuber**, coloque o nome e o link do canal (pode colar Twitch, Kick e YouTube juntos). Ele entra na hora e, se estiver ao vivo jogando GTA, já começa a gravar e clipar. Quem você adicionou tem um **✕** pra tirar.
+- **Lives do YouTube**: o chat ao vivo do YouTube é lido pelo yt-dlp (a biblioteca antiga parou de funcionar em nov/2026 e as lives do YouTube nunca disparavam corte).
+- A busca automática de lives fora da lista existe, mas vem **desligada** (Ferramentas → Configurações).
 
+## Seus clipes não somem
+
+- **Excluir manda pra 🗑 Lixeira** (em Clips). Dá pra **♻ Restaurar** quando quiser; só **Apagar de vez** (dentro da Lixeira, com confirmação) remove o vídeo do computador.
+- Clipe que estiver no disco mas fora da lista (ex.: excluído com o vídeo aberto) volta sozinho pra Lixeira quando o Clipador abre.
+
+## Quando a IA grátis acaba
+
+- Com a cota grátis no fim, o momento é **pulado** (aparece em Ao vivo → Atividade) em vez de virar clipe genérico ("melhores momentos da live").
+- A fila de momentos atende **o mais forte primeiro** ("Cortar agora" passa na frente) e, cheia, descarta o mais fraco, em vez de deixar todos saírem do buffer.
+- **Cole mais chaves grátis** (Cerebras e Gemini, além do Groq) em Ferramentas → Configurações: cada uma soma cota e o Clipador troca entre elas sozinho.
 ## Legenda e textos em português de verdade
 
 - **Gringo (Kai Cenat, IShowSpeed):** a legenda sai traduzida pro português do jeito que se fala em live, em primeira pessoa e com gíria ("bro what the fuck" vira "mano, que porra é essa").

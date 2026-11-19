@@ -27,6 +27,7 @@
         <button data-f="todo" class="on">Para postar <span class="count" id="n-todo">0</span></button>
         <button data-f="done">Postados <span class="count" id="n-done">0</span></button>
         <button data-f="all">Todos</button>
+        <button data-f="trash" title="Clipes excluídos: dá pra restaurar">🗑 Lixeira <span class="count" id="n-trash">0</span></button>
       </div>
       <select id="filter"><option value="">Todos os streamers</option></select>
       <input id="search" type="search" placeholder="Buscar título, card, fala…">
@@ -38,7 +39,9 @@
       <button class="primary" data-bulk="zip">⬇ Baixar selecionados (.zip)</button>
       <button data-bulk="posted">✅ Marcar como postados</button>
       <button data-bulk="unposted">↩ Voltar pra fila</button>
-      <button data-bulk="delete" class="danger">🗑 Excluir</button>
+      <button data-bulk="delete" class="danger" data-mode="list">🗑 Mandar pra Lixeira</button>
+      <button data-bulk="restore" class="primary" data-mode="trash">♻ Restaurar</button>
+      <button data-bulk="purge" class="danger" data-mode="trash">Apagar de vez</button>
       <button data-bulk="clear" class="ghost">Limpar seleção</button>
     </div>
 
@@ -63,6 +66,16 @@
         <button class="ghost mini" type="button" data-pick="none">Nenhum</button>
       </div>
       <div class="pick-list" id="pick-list"></div>
+      <form id="add-form" class="add-streamer">
+        <b>➕ Adicionar streamer / youtuber</b>
+        <div class="row">
+          <input name="display" placeholder="Nome (ex.: LuanZ7)" maxlength="60" required style="max-width:220px">
+          <input name="links" class="grow" placeholder="Link(s) do canal: twitch.tv/…  kick.com/…  youtube.com/@…" required>
+          <select name="lang" title="Idioma da live"><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option></select>
+          <button class="primary" type="submit">Adicionar</button>
+        </div>
+        <div class="hint">Pode colar mais de um link (Twitch, Kick e YouTube do mesmo streamer), separados por espaço. Se estiver ao vivo jogando GTA, já começa a gravar e clipar.</div>
+      </form>
     </div>
     <div class="top">
       <div class="box">

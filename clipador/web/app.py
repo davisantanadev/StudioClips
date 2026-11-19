@@ -17,9 +17,11 @@ from pydantic import BaseModel, Field
 
 from .. import db
 from .. import twitchclips
+from ..recover import GONE_MARK
 from ..ai import PROVIDERS, any_key, check_providers, groq_key
 from ..ai import reset_state as reset_ai_state
-from ..config import (QUALITY_HD, QUALITY_LIGHT, QUALITY_MAX, Settings, load_config, save_extra_streamer, save_streamers_enabled, save_user_env,
+from ..config import (QUALITY_HD, QUALITY_LIGHT, QUALITY_MAX, Settings, Streamer, extra_streamer_names,
+                      load_config, remove_extra_streamer, save_extra_streamer, save_streamers_enabled, save_user_env,
                       save_user_settings, save_webcam, user_dir)
 from ..pipeline import process_candidate, rerender_card
 from ..recorder import frame_from_file, probe, snapshot
@@ -50,6 +52,12 @@ class WebcamIn(BaseModel):
 class IdsIn(BaseModel):
     ids: list[int]
     posted: bool = True
+
+
+class AddStreamerIn(BaseModel):
+    display: str = Field(min_length=1, max_length=60)
+    links: str = Field(min_length=1, max_length=1000)  # um ou mais links de canal (Twitch, Kick, YouTube)
+    lang: Literal["pt", "en", "es"] = "pt"
 
 
 class VodIn(BaseModel):
@@ -218,9 +226,9 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
 
     # ---------- clipes ----------
     @app.get("/api/clips")
-    def clips(posted: bool | None = None, streamer: str | None = None):
+    def clips(posted: bool | None = None, streamer: str | None = None, trash: bool = False):
         out = []
-        for c in db.list_clips(posted, streamer):
+        for c in db.list_clips(posted, streamer, trash=trash):
             j = c.to_json()
             try:  # versão = quando o vídeo foi gerado: muda ao refazer, então o navegador não mostra o antigo
                 j["v"] = int((settings.data_dir / c.video_path).stat().st_mtime)
@@ -252,17 +260,53 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
         bg(f"refazendo card #{clip_id}", run)
         return {"ok": True}
 
-    def _delete(clip_id: int) -> bool:
+    def _trash(clip_id: int) -> bool:
+        """Excluir = mandar pra Lixeira. Nenhum arquivo é apagado aqui."""
         c = db.get_clip(clip_id)
         if not c:
             return False
-        shutil.rmtree(settings.data_dir / c.workdir, ignore_errors=True)
+        db.trash_clip(clip_id)
+        return True
+
+    def _purge(clip_id: int) -> bool:
+        """Apagar de vez: só pra quem já está na Lixeira."""
+        c = db.get_clip(clip_id)
+        if not c or not c.deleted_at:
+            return False
+        folder = settings.data_dir / c.workdir
+        try:  # se o Windows não deixar apagar (vídeo aberto), a marca impede que ele volte na recuperação
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / GONE_MARK).write_text("apagado pelo usuário", encoding="utf-8")
+        except OSError:
+            pass
+        shutil.rmtree(folder, ignore_errors=True)
         db.delete_clip(clip_id)
         return True
 
     @app.post("/api/clips/bulk-delete")
     def bulk_delete(body: IdsIn):
-        return {"deleted": sum(_delete(i) for i in body.ids)}
+        return {"trashed": sum(_trash(i) for i in body.ids)}
+
+    @app.post("/api/clips/bulk-restore")
+    def bulk_restore(body: IdsIn):
+        for i in body.ids:
+            db.restore_clip(i)
+        return {"ok": True}
+
+    @app.post("/api/clips/{clip_id}/restore")
+    def restore(clip_id: int):
+        if not db.get_clip(clip_id):
+            raise HTTPException(404)
+        db.restore_clip(clip_id)
+        return {"ok": True}
+
+    @app.post("/api/clips/bulk-purge")
+    def bulk_purge(body: IdsIn):
+        return {"purged": sum(_purge(i) for i in body.ids)}
+
+    @app.post("/api/trash/empty")
+    def empty_trash():
+        return {"purged": sum(_purge(c.id) for c in db.list_clips(trash=True))}
 
     @app.post("/api/clips/bulk-posted")
     def bulk_posted(body: IdsIn):
@@ -297,7 +341,7 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
 
     @app.delete("/api/clips/{clip_id}")
     def delete(clip_id: int):
-        if not _delete(clip_id):
+        if not _trash(clip_id):
             raise HTTPException(404)
         return {"ok": True}
 
@@ -305,10 +349,40 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
     @app.get("/api/streamers")
     def list_streamers():
         live = {w["name"] for w in (runner.status()["live"] if runner else [])}
+        extras = extra_streamer_names()
         return [{"name": s.name, "display": s.display, "lang": s.lang, "enabled": s.enabled,
-                 "webcam": s.webcam, "live": s.name in live,
+                 "webcam": s.webcam, "live": s.name in live, "extra": s.name in extras,
                  "channels": [{"platform": c.platform, "channel": c.channel, "url": c.url} for c in s.channels]}
                 for s in streamers().values()]
+
+    @app.post("/api/streamers")
+    def add_streamer(body: AddStreamerIn):
+        """Põe um streamer/youtuber na lista pelo nome + link(s) do canal. Se estiver ao vivo, já começa a gravar."""
+        from .. import discover
+        chans, seen = [], set()
+        for part in re.split(r"[\s,;]+", body.links):
+            ch = discover.parse_channel_url(part)
+            if ch and (ch.platform, ch.channel.lower()) not in seen:
+                seen.add((ch.platform, ch.channel.lower()))
+                chans.append(ch)
+        if not chans:
+            raise HTTPException(400, "não reconheci nenhum link de canal (Twitch, Kick ou YouTube)")
+        name = discover._norm(body.display) or discover.auto_name(chans[0].platform, chans[0].channel)
+        s = Streamer(name, body.display.strip(), body.lang, chans)
+        save_extra_streamer(s)
+        if runner:
+            runner.reload()
+            runner.wake()
+        return {"ok": True, "name": name, "channels": [{"platform": c.platform, "channel": c.channel} for c in chans]}
+
+    @app.delete("/api/streamers/{name}")
+    def remove_streamer(name: str):
+        if name not in extra_streamer_names():
+            raise HTTPException(400, "só dá pra tirar quem você adicionou (os da lista padrão: desmarque em Ao vivo)")
+        remove_extra_streamer(name)
+        if runner:
+            runner.forget(name)
+        return {"ok": True}
 
     @app.post("/api/streamers/{name}/snapshot")
     def snap(name: str):

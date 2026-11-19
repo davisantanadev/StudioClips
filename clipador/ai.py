@@ -95,8 +95,9 @@ PROVIDERS: tuple[Provider, ...] = (
              text=("gpt-oss-120b", "qwen-3-235b-a22b-instruct-2507", "llama-3.3-70b", "qwen-3-32b", "llama3.1-8b"),
              signup="https://cloud.cerebras.ai"),
     Provider("gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY",
-             text=("gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash-lite"),
-             vision=("gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"),
+             # o Google aposentou a família 2.x pra contas novas (nov/2026); "-latest" acompanha as trocas
+             text=("gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"),
+             vision=("gemini-3.8-flash", "gemini-flash-latest"),
              json_mode=False, signup="https://aistudio.google.com/apikey"),
 )
 MAX_WAIT_S = 25  # se tudo estiver no limite por pouco tempo, espera até isso; mais que isso, desiste
@@ -211,7 +212,16 @@ def _model_gone(r: httpx.Response) -> bool:
     if "content must be a string" in msg or "image" in msg and "support" in msg:
         return True  # mandou imagem pra um modelo sem visão
     return "model" in code or ("model" in msg and any(w in msg for w in (
-        "decommission", "not exist", "not found", "does not support", "no access", "not supported")))
+        "decommission", "not exist", "not found", "does not support", "no access", "not supported",
+        "no longer available", "deprecated", "retired", "shut down", "is not available")))
+
+
+def _too_big_for_minute(r: httpx.Response) -> bool:
+    """413 "Request too large … tokens per minute": cabe no próximo minuto, não é erro de verdade."""
+    if r.status_code != 413:
+        return False
+    _, msg = _error_info(r)
+    return "per minute" in msg or "tpm" in msg or "too large" in msg
 
 
 def _call(kind: str, path: str, preferred: str | None, make_kw) -> httpx.Response | None:
@@ -241,6 +251,11 @@ def _call(kind: str, path: str, preferred: str | None, make_kw) -> httpx.Respons
                 if r.status_code >= 500:
                     time.sleep(1.5)
                     continue
+                if _too_big_for_minute(r):
+                    with _state_lock:
+                        _cool[(p.name, key, m)] = time.time() + 60
+                    log.info("%s %s: pedido grande pro limite do minuto — usando outro modelo", p.name, m)
+                    break
                 try:
                     gone = _model_gone(r)
                 except Exception:  # resposta de erro num formato inesperado: só pula pra próxima IA

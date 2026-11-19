@@ -91,18 +91,16 @@ def _drop_cringe_sentences(text: str) -> str:
 
 
 def polish_title(title: str, card: list[str], display: str) -> str:
-    """Título profissional: começa com "GTA 6", termina com o nome do streamer, sem termo brega."""
+    """Título como a IA escreveu (cada um com a sua cara), só sem termo brega/robô e com a 1ª letra maiúscula.
+    Antes todo título virava "GTA 6: … | Nome" — ficava tudo igual."""
     t = re.sub(r"\s+", " ", title or "").strip()
-    if not t or CRINGE_RE.search(t):
-        hook = " ".join(card).strip().capitalize() if card and not is_bad_card(card, display) else "melhores momentos"
-        t = f"{hook}"
-    t = re.sub(r"^\s*(gta\s*(6|vi)\s*[:|\-–]?\s*)", "", t, flags=re.I)
-    t = re.sub(rf"\s*[|\-–]\s*{re.escape(display)}\s*$", "", t, flags=re.I)
+    if not t or CRINGE_RE.search(t) or ROBOT_RE.search(t):
+        good_card = card and not is_bad_card(card, display)
+        t = " ".join(card).strip().capitalize() if good_card else f"Olha o que o {display} aprontou no GTA 6 😂"
     first = t.split(" ", 1)[0]
-    if first[:1].islower() and first[1:] == first[1:].lower():  # "o assalto" -> "O assalto"; "xQc" fica
+    if first[:1].islower() and first[1:] == first[1:].lower():  # "quem deixou…" -> "Quem deixou…"; "xQc" fica
         t = t[:1].upper() + t[1:]
-    return f"GTA 6: {t} | {display}"[:100]
-
+    return t[:100]
 
 def _tag(s: str) -> str:
     return "#" + re.sub(r"[^0-9A-Za-zÀ-ÿ_]", "", s.lstrip("#"))

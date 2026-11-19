@@ -47,6 +47,53 @@ class Job:
     signals: dict = field(default_factory=dict)
 
 
+MAX_PENDING = 6  # momentos esperando edição; passou disso, o mais fraco sai (senão todos envelhecem e saem do buffer)
+
+
+def priority(job: Job) -> float:
+    if job.manual:
+        return 1e6                                   # "Cortar agora" passa na frente de tudo
+    s = job.signals or {}
+    if s.get("twitch_clips"):
+        return 100 + s["twitch_clips"]               # vários espectadores clipando: momento certo
+    return float(s.get("score") or 0)
+
+
+class JobQueue:
+    """Fila de momentos por prioridade: atende o mais forte primeiro e, cheia, descarta o mais fraco."""
+
+    def __init__(self, max_pending: int = MAX_PENDING) -> None:
+        self.max_pending = max_pending
+        self._items: list[tuple[float, int, Job]] = []
+        self._seq = 0
+        self._cv = threading.Condition()
+
+    def put(self, job: Job) -> Job | None:
+        """Põe na fila; devolve o job descartado (o mais fraco) se ela encheu."""
+        with self._cv:
+            self._seq += 1
+            self._items.append((priority(job), -self._seq, job))
+            dropped = None
+            if len(self._items) > self.max_pending:
+                weakest = min(self._items, key=lambda x: (x[0], -x[1]))
+                self._items.remove(weakest)
+                dropped = weakest[2]
+            self._cv.notify()
+            return dropped
+
+    def get(self, timeout: float | None = None) -> Job | None:
+        with self._cv:
+            if not self._items and not self._cv.wait_for(lambda: bool(self._items), timeout):
+                return None
+            best = max(self._items, key=lambda x: (x[0], x[1]))
+            self._items.remove(best)
+            return best[2]
+
+    def qsize(self) -> int:
+        with self._cv:
+            return len(self._items)
+
+
 class StreamerWorker:
     """Uma live sendo gravada: buffer + chat + detector."""
 
@@ -137,7 +184,7 @@ class Runner:
         self.settings = settings
         self.streamers = {s.name: s for s in streamers}
         self.workers: dict[str, StreamerWorker] = {}
-        self.jobs: "queue.Queue[Job]" = queue.Queue()
+        self.jobs = JobQueue()
         self.processing: list[str] = []  # (sem limite por hora: cada streamer tem só o intervalo mínimo)
         self.log: deque[str] = deque(maxlen=60)
         self._stop = threading.Event()
@@ -157,6 +204,16 @@ class Runner:
             self.streamers[s.name] = s
             if s.name in self.workers:
                 self.workers[s.name].streamer = s
+
+    def wake(self) -> None:
+        """Procura agora quem está ao vivo (ex.: acabou de adicionar um streamer)."""
+        self._wake.set()
+
+    def forget(self, name: str) -> None:
+        """Tirou o streamer da lista: para de gravar e esquece."""
+        self._drop(name, "⏹ {} saiu da lista — parou de gravar")
+        with self._lock:
+            self.streamers.pop(name, None)
 
     def force_clip(self, name: str) -> bool:
         w = self.workers.get(name)
@@ -220,7 +277,11 @@ class Runner:
         why = describe(job.signals)
         self.note(f"🔥 {job.worker.streamer.display}: {job.signals.get('kind') or 'momento'}"
                   + (f" ({why})" if why else "") + " — na fila")
-        self.jobs.put(job)
+        dropped = self.jobs.put(job)
+        if dropped is not None and dropped is not job:
+            self.note(f"⏭ fila cheia: deixei de lado um momento mais fraco de {dropped.worker.streamer.display}")
+        elif dropped is job:
+            self.note(f"⏭ fila cheia: esse momento de {job.worker.streamer.display} era o mais fraco, deixei de lado")
 
     def refresh_discovered(self, now: float | None = None) -> None:
         """Junta à lista as lives de GTA mais vistas agora (Twitch, Kick, YouTube) que não estão nela.
@@ -297,6 +358,8 @@ class Runner:
         while not self._stop.is_set():
             try:
                 job = self.jobs.get(timeout=1)
+                if job is None:
+                    continue
             except queue.Empty:
                 continue
             w = job.worker

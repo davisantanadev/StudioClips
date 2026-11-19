@@ -87,7 +87,7 @@ def test_retired_model_is_skipped(monkeypatch):
 
 
 def test_images_go_to_a_vision_model(monkeypatch):
-    net = FakeNet({"groq": GROQ, "gemini": ["gemini-2.5-flash"]}, limited={("groq", "qwen/qwen3.8-27b")})
+    net = FakeNet({"groq": GROQ, "gemini": ["gemini-3.8-flash"]}, limited={("groq", "qwen/qwen3.8-27b")})
     _install(monkeypatch, net, keys=("GROQ_API_KEY", "GEMINI_API_KEY"))
     j = ai.chat_json("s", "u", "x", images=[b"\xff\xd8fakejpeg"])
     assert j["prov"] == "gemini" and j["img"]
@@ -147,3 +147,56 @@ def test_error_info_reads_any_shape():
     assert ai._error_info(httpx.Response(400, request=req, json=[{"error": {"message": "Model gone"}}]))[1] == "model gone"
     assert ai._error_info(httpx.Response(400, request=req, json=["x"])) == ("", "")
     assert ai._error_info(httpx.Response(400, request=req, text="oops")) == ("", "oops")
+
+
+# ---------- erros reais vistos em 19/11/2026 ----------
+class ErrNet(FakeNet):
+    """Responde um erro específico pra um (provedor, modelo)."""
+
+    def __init__(self, models, errors):
+        super().__init__(models)
+        self.errors = errors  # (prov, modelo) -> (status, corpo)
+
+    def post(self, url, headers=None, timeout=None, json=None, data=None, files=None, **kw):
+        p, model = self.prov(url), (json or data)["model"]
+        if (p, model) in self.errors:
+            self.calls.append((p, model))
+            st, body = self.errors[(p, model)]
+            return httpx.Response(st, request=httpx.Request("POST", url), json=body)
+        return super().post(url, headers=headers, timeout=timeout, json=json, data=data, files=files, **kw)
+
+
+def test_modelo_do_gemini_aposentado_nao_e_tentado_de_novo(monkeypatch):
+    gone = [{"error": {"code": 404, "message": "This model models/gemini-2.5-flash is no longer available to new "
+                                               "users. Please update your code to use models/gemini-3.8-flash"}}]
+    net = ErrNet({"gemini": ["gemini-2.5-flash", "gemini-3.8-flash"]}, {("gemini", "gemini-2.5-flash"): (404, gone)})
+    _install(monkeypatch, net, keys=("GEMINI_API_KEY",))
+    monkeypatch.setattr(ai, "PROVIDERS", (ai.Provider("gemini", "https://gemini", "GEMINI_API_KEY",
+                                                      text=("gemini-2.5-flash", "gemini-3.8-flash"),
+                                                      json_mode=False),))
+    assert ai.chat_json("s", "u", "x")["model"] == "gemini-3.8-flash"
+    net.calls.clear()
+    ai.chat_json("s", "u", "x")
+    assert net.calls == [("gemini", "gemini-3.8-flash")]          # o aposentado não é tentado de novo
+
+
+def test_lista_do_gemini_usa_modelos_atuais():
+    gem = next(p for p in ai.PROVIDERS if p.name == "gemini")
+    assert "gemini-2.5-flash" not in gem.text and "gemini-3.8-flash" in gem.text
+
+
+def test_pedido_grande_demais_pro_minuto_espera_e_usa_outro(monkeypatch):
+    big = {"error": {"message": "Request too large for model `qwen/qwen3.8-27b` on input tokens per minute (ITPM): "
+                                "Limit 7000, Requested 7500", "code": "rate_limit_exceeded"}}
+    net = ErrNet({"groq": GROQ}, {("groq", "qwen/qwen3.8-27b"): (413, big)})
+    _install(monkeypatch, net)
+    j = ai.chat_json("s", "u", "x", images=[b"\xff\xd8fakejpeg"])
+    assert j is None or j["model"] != "qwen/qwen3.8-27b"
+    assert ai._cool.get(("groq", "k_GROQ_API_KEY", "qwen/qwen3.8-27b"), 0) > ai.time.time()   # fica de lado 1 min
+
+
+def test_json_invalido_do_groq_tenta_outro_modelo(monkeypatch):
+    bad = {"error": {"message": "Failed to validate JSON.", "code": "json_validate_failed"}}
+    net = ErrNet({"groq": GROQ}, {("groq", "openai/gpt-oss-120b"): (400, bad)})
+    _install(monkeypatch, net)
+    assert ai.chat_json("s", "u", "openai/gpt-oss-120b")["model"] == "qwen/qwen3.8-27b"

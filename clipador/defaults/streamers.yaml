@@ -4,8 +4,8 @@
 # Cada streamer pode ter vários canais (Twitch, Kick, YouTube); o sistema grava o primeiro que estiver
 # ao vivo, então ponha primeiro a plataforma principal dele. No YouTube vale @handle ou o ID do canal (UC…).
 # Canais conferidos nas plataformas em 19/11/2026. Quem não estiver jogando GTA não é gravado (require_gta).
-# Além desta lista, o Clipador acha sozinho as lives de GTA mais vistas do momento (Twitch, Kick e YouTube):
-# liga/desliga em Ferramentas → Configurações. Streamer que entra por VOD fica salvo em %APPDATA%\ClipadorGTA6.
+# Só quem está nesta lista (ou foi adicionado no painel) é clipado. Pra pôr alguém: Ferramentas → Adicionar
+# streamer (nome + link do canal). Quem entra pelo painel ou por VOD fica salvo em %APPDATA%\ClipadorGTA6.
 
 settings:
   pre_s: 43            # segundos antes do pico (sem IA)
@@ -140,6 +140,13 @@ streamers:
     lang: pt
     channels:
       - {platform: twitch, channel: bistecone}
+  - name: luanz7
+    display: LuanZ7
+    lang: pt
+    channels:
+      - {platform: kick, channel: luanz7}
+      - {platform: twitch, channel: luanz7}
+      - {platform: youtube, channel: UCiR8FdFKFSaaB6DVsy9_eRQ}   # @luanz7
   - name: skorpiongamer
     display: Skorpion Gamer
     lang: pt

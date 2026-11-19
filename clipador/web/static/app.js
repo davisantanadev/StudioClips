@@ -13,7 +13,8 @@ const PLAT = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
 const ver = (c) => `?v=${c.v || Math.floor(c.created_at)}`;
 const postText = (c) => `${c.title}\n\n${c.description}\n\n${c.hashtags.join(" ")}`;
 
-const state = { view: "clips", f: "todo", streamer: "", q: "", clips: [], known: new Set(), first: true, sel: new Set(), open: null };
+const state = { view: "clips", f: "todo", streamer: "", q: "", clips: [], trash: [], known: new Set(), first: true, sel: new Set(), open: null };
+const inTrash = () => state.f === "trash";
 
 /* ---------------- navegação ---------------- */
 function go(view) {
@@ -26,6 +27,7 @@ window.addEventListener("hashchange", () => go(location.hash.slice(1) || "clips"
 /* ---------------- clips ---------------- */
 function visible() {
   const q = state.q.toLowerCase();
+  if (inTrash()) return state.trash.filter((c) => !q || `${c.title} ${c.card.join(" ")} ${c.display}`.toLowerCase().includes(q));
   return state.clips.filter((c) =>
     (state.f === "all" || c.posted === (state.f === "done")) &&
     (!q || `${c.title} ${c.card.join(" ")} ${c.transcript} ${c.display}`.toLowerCase().includes(q)));
@@ -47,12 +49,15 @@ function tile(c) {
     <div class="meta">
       <div class="who"><b>${esc(c.display)}</b><span>${esc(PLAT[c.platform] || c.platform)} · ${ago(c.created_at)}</span></div>
       <div class="title" data-open>${esc(c.title)}</div>
-      <div class="quick">
+      ${inTrash() ? `<div class="quick">
+        <button class="grow" data-a="restore">♻ Restaurar</button>
+        <button class="danger ghost" data-a="purge">Apagar de vez</button>
+      </div>` : `<div class="quick">
         <a class="btn icon" href="/media/${c.video_path}${ver(c)}" download="${c.streamer}_${c.id}.mp4" title="Baixar vídeo">⬇</a>
         <button class="icon" data-a="copy" title="Copiar texto do post">📋</button>
         <button class="icon" data-a="posted" title="${c.posted ? "Voltar pra fila" : "Marcar postado"}">${c.posted ? "↩" : "✅"}</button>
         <button class="icon grow" data-open>Abrir</button>
-      </div>
+      </div>`}
     </div>`;
   return el;
 }
@@ -65,12 +70,15 @@ function renderGrid() {
   $("#n-todo").textContent = state.clips.filter((c) => !c.posted).length;
   $("#n-done").textContent = state.clips.filter((c) => c.posted).length;
   $("#n-badge").textContent = state.clips.filter((c) => !c.posted).length;
+  $("#n-trash").textContent = state.trash.length;
   renderBulk();
 }
 
 function renderBulk() {
   // descarta seleções de clipes que sumiram
-  const ids = new Set(state.clips.map((c) => c.id));
+  const ids = new Set((inTrash() ? state.trash : state.clips).map((c) => c.id));
+  $$("#bulkbar [data-mode]").forEach((b) => (b.hidden = b.dataset.mode !== (inTrash() ? "trash" : "list")));
+  $$("#bulkbar [data-bulk=zip], #bulkbar [data-bulk=posted], #bulkbar [data-bulk=unposted]").forEach((b) => (b.hidden = inTrash()));
   state.sel.forEach((id) => !ids.has(id) && state.sel.delete(id));
   const n = state.sel.size;
   $("#bulkbar").hidden = n === 0;
@@ -80,7 +88,11 @@ function renderBulk() {
 }
 
 async function loadClips() {
-  const all = await api("/api/clips" + (state.streamer ? `?streamer=${encodeURIComponent(state.streamer)}` : ""));
+  const qs = state.streamer ? `streamer=${encodeURIComponent(state.streamer)}` : "";
+  const [all, trash] = await Promise.all([api("/api/clips?" + qs), api("/api/clips?trash=true&" + qs)]);
+  const trashChanged = JSON.stringify(trash.map((c) => c.id)) !== JSON.stringify(state.trash.map((c) => c.id));
+  state.trash = trash;
+  if (trashChanged && inTrash()) renderGrid();
   const fresh = all.filter((c) => !state.known.has(c.id));
   const key = (c) => [c.id, c.posted, c.status, c.title, c.card, c.v];
   const changed = JSON.stringify(all.map(key)) !== JSON.stringify(state.clips.map(key));
@@ -103,7 +115,7 @@ async function loadClips() {
 $("#grid").addEventListener("click", async (e) => {
   const tileEl = e.target.closest(".tile");
   if (!tileEl) return;
-  const c = state.clips.find((x) => x.id === +tileEl.dataset.id);
+  const c = (inTrash() ? state.trash : state.clips).find((x) => x.id === +tileEl.dataset.id);
   if (e.target.closest(".pick")) {
     if (e.target.tagName !== "INPUT") return;
     e.target.checked ? state.sel.add(c.id) : state.sel.delete(c.id);
@@ -114,8 +126,13 @@ $("#grid").addEventListener("click", async (e) => {
   try {
     if (a === "copy") return copy(postText(c), "Título + descrição + hashtags copiados");
     if (a === "posted") { await api(`/api/clips/${c.id}/posted`, { method: "POST", body: JSON.stringify({ posted: !c.posted }) }); toast(c.posted ? "Voltou pra fila" : "Marcado como postado"); return loadClips(); }
+    if (a === "restore") { await api(`/api/clips/${c.id}/restore`, { method: "POST" }); toast("♻ Voltou pra lista"); await loadClips(); return renderGrid(); }
+    if (a === "purge") {
+      if (!confirm("Apagar esse clipe DE VEZ? O vídeo some do computador e não dá pra desfazer.")) return;
+      await api("/api/clips/bulk-purge", { method: "POST", body: JSON.stringify({ ids: [c.id] }) }); toast("Apagado de vez"); await loadClips(); return renderGrid();
+    }
   } catch (err) { return toast("Erro: " + err.message); }
-  if (e.target.closest("[data-open]")) openViewer(c.id);
+  if (e.target.closest("[data-open]") && !inTrash()) openViewer(c.id);
 });
 
 $("#check-all").addEventListener("change", (e) => {
@@ -125,7 +142,7 @@ $("#check-all").addEventListener("change", (e) => {
 $("#seg").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   $$("#seg button").forEach((x) => x.classList.toggle("on", x === b));
-  state.f = b.dataset.f; renderGrid();
+  state.f = b.dataset.f; state.sel.clear(); renderGrid();
 });
 $("#filter").addEventListener("change", (e) => { state.streamer = e.target.value; state.clips = []; loadClips(); });
 $("#search").addEventListener("input", (e) => { state.q = e.target.value; renderGrid(); });
@@ -150,9 +167,17 @@ $("#bulkbar").addEventListener("click", async (e) => {
       toast(a === "posted" ? `${ids.length} marcados como postados` : `${ids.length} voltaram pra fila`);
     }
     if (a === "delete") {
-      if (!confirm(`Excluir ${ids.length} clipe(s)? Não dá pra desfazer.`)) return;
       await api("/api/clips/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) });
-      toast(`${ids.length} excluídos`);
+      toast(`${ids.length} foram pra Lixeira (dá pra restaurar)`);
+    }
+    if (a === "restore") {
+      await api("/api/clips/bulk-restore", { method: "POST", body: JSON.stringify({ ids }) });
+      toast(`♻ ${ids.length} voltaram pra lista`);
+    }
+    if (a === "purge") {
+      if (!confirm(`Apagar ${ids.length} clipe(s) DE VEZ? Os vídeos somem do computador e não dá pra desfazer.`)) return;
+      await api("/api/clips/bulk-purge", { method: "POST", body: JSON.stringify({ ids }) });
+      toast(`${ids.length} apagados de vez`);
     }
     state.sel.clear(); await loadClips(); renderGrid();
   } catch (err) { toast("Erro: " + err.message); }
@@ -181,7 +206,7 @@ function openViewer(id) {
       <input data-f="l1" maxlength="42" value="${esc(c.card[0] || "")}"><input data-f="l2" maxlength="42" value="${esc(c.card[1] || "")}">
       <button data-a="card" ${busy ? "disabled" : ""}>${busy ? "⏳ Refazendo o vídeo… (troca sozinho quando ficar pronto)" : "🔁 Refazer vídeo com esse card"}</button></div>
     ${c.transcript ? `<details><summary>Fala transcrita</summary><p class="hint">${esc(c.transcript)}</p></details>` : ""}
-    <button data-a="del" class="danger ghost">🗑 Excluir clipe</button>`;
+    <button data-a="del" class="danger ghost">🗑 Mandar pra Lixeira</button>`;
   $("#viewer").hidden = false;
   document.body.style.overflow = "hidden";
 }
@@ -207,7 +232,7 @@ $("#viewer").addEventListener("click", async (e) => {
     if (a === "posted") { await api(`/api/clips/${c.id}/posted`, { method: "POST", body: JSON.stringify({ posted: !c.posted }) }); toast(c.posted ? "Voltou pra fila" : "Marcado como postado"); }
     if (a === "save") { await api(`/api/clips/${c.id}`, { method: "PATCH", body: JSON.stringify({ title: f("title"), description: f("description"), hashtags: f("hashtags").split(/\s+/).filter(Boolean) }) }); toast("Textos salvos"); }
     if (a === "card") { await api(`/api/clips/${c.id}/card`, { method: "POST", body: JSON.stringify({ lines: [f("l1"), f("l2")].filter((x) => x.trim()) }) }); toast("Refazendo o vídeo… (aparece em ~1 min)"); }
-    if (a === "del") { if (!confirm("Excluir esse clipe?")) return; await api(`/api/clips/${c.id}`, { method: "DELETE" }); toast("Excluído"); closeViewer(); }
+    if (a === "del") { closeViewer(); await api(`/api/clips/${c.id}`, { method: "DELETE" }); toast("Foi pra Lixeira (dá pra restaurar)"); }
     await loadClips(); if (state.open) openViewer(state.open);
   } catch (err) { toast("Erro: " + err.message); }
 });
@@ -317,7 +342,7 @@ function renderControl(s) {
     const rec = state.liveNames.has(x.name);
     const tag = rec ? `<span class="tag rec">● gravando</span>` : "";
     return `<label class="pick-item${x.enabled ? " on" : ""}"><input type="checkbox" data-name="${esc(x.name)}" ${x.enabled ? "checked" : ""}>
-      <span class="grow"><b>${esc(x.display)}</b> <span class="hint">${esc(x.channels.map((c) => PLAT[c.platform] || c.platform).join(" · "))}</span></span>${tag}</label>`;
+      <span class="grow"><b>${esc(x.display)}</b> <span class="hint">${esc(x.channels.map((c) => PLAT[c.platform] || c.platform).join(" · "))}</span></span>${tag}${x.extra ? `<button type="button" class="ghost mini" data-remove="${esc(x.name)}" title="Tirar da lista">✕</button>` : ""}</label>`;
   }).join("");
 }
 $("#auto-btn").addEventListener("click", async () => {
@@ -333,6 +358,22 @@ async function setEnabled(changes) {
     renderControl();
   } catch (err) { toast("Erro: " + err.message); }
 }
+$("#pick-list").addEventListener("click", async (e) => {
+  const name = e.target.closest("[data-remove]")?.dataset.remove; if (!name) return;
+  e.preventDefault();
+  if (!confirm("Tirar esse streamer da lista? Os clipes dele continuam.")) return;
+  try { await api(`/api/streamers/${encodeURIComponent(name)}`, { method: "DELETE" }); toast("Saiu da lista"); loadStreamers(); }
+  catch (err) { toast("Erro: " + err.message); }
+});
+$("#add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    const r = await api("/api/streamers", { method: "POST", body: JSON.stringify({ display: fd.get("display").trim(), links: fd.get("links").trim(), lang: fd.get("lang") }) });
+    toast(`✅ ${fd.get("display")} entrou na lista (${r.channels.map((c) => PLAT[c.platform] || c.platform).join(", ")}) — se estiver ao vivo, já começa a gravar`);
+    e.target.reset(); loadStreamers(); loadStatus().catch(() => {});
+  } catch (err) { toast("Erro: " + err.message); }
+});
 $("#pick-list").addEventListener("change", (e) => {
   const cb = e.target.closest("input[data-name]"); if (!cb) return;
   setEnabled({ [cb.dataset.name]: cb.checked });

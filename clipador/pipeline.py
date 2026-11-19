@@ -160,8 +160,16 @@ def process_candidate(streamer: Streamer, analysis: Path, peak_offset: float, se
                          whisper_prompt(streamer.display, streamer.lang))
     sel = select_moment(tr_full, chat, peak_offset, total, display=streamer.display, live_title=live_title,
                         min_s=settings.min_clip_s, max_s=settings.max_clip_s, model=settings.groq_text_model,
-                        signals=describe(signals), ideal_s=settings.ideal_clip_s)
+                        signals=describe(signals), ideal_s=settings.ideal_clip_s,
+                        recent_titles=[c.title for c in db.list_clips()[:8]])
     (workdir / "selecao.json").write_text(json.dumps(vars(sel), ensure_ascii=False, indent=1), encoding="utf-8")
+    if not sel.by_ai and not manual and any_key("text"):
+        # tem chave, mas a IA não respondeu (cota grátis acabou): sem nota não dá pra saber se é bom,
+        # e clipe com texto padrão só lota a fila. Pula e segue pro próximo momento.
+        note(f"⏭ {streamer.display}: IA sem cota agora — pulei esse momento (cole mais chaves grátis em "
+             "Ferramentas → Configurações pra não perder momentos)")
+        shutil.rmtree(workdir, ignore_errors=True)
+        return None
     if sel.by_ai and sel.score is not None and sel.score < settings.min_score and not manual:
         note(f"🗑 {streamer.display}: momento fraco (nota {sel.score:.0f}) — {sel.reason}")
         shutil.rmtree(workdir, ignore_errors=True)

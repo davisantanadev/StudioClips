@@ -75,7 +75,7 @@ class Settings:
     handle: str = "@seuperfil"
     accent: str = "#FF2E63"
     card_seconds: float = 4.0  # o card some depois disso (0 = fica o vídeo todo)
-    auto_discover: bool = True       # acha sozinho as lives de GTA mais vistas (Twitch, Kick, YouTube)
+    auto_discover: bool = False      # acha sozinho lives de GTA fora da lista (desligado: só clipa quem está na lista)
     discover_min_viewers: int = 3000 # só quem tem pelo menos isso de gente assistindo
     discover_max: int = 8            # quantas lives achadas sozinho no máximo
     discover_langs: list[str] = field(default_factory=lambda: ["pt"])  # achados sozinho: só live em português
@@ -240,6 +240,22 @@ def save_extra_streamer(s: "Streamer") -> None:
     data.append({"name": s.name, "display": s.display, "lang": s.lang,
                  "channels": [{"platform": c.platform, "channel": c.channel} for c in s.channels]})
     p.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def remove_extra_streamer(name: str) -> bool:
+    p = extra_streamers_path()
+    if not p.exists():
+        return False
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or []
+    keep = [d for d in data if isinstance(d, dict) and d.get("name") != name]
+    if len(keep) == len(data):
+        return False
+    p.write_text(yaml.safe_dump(keep, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return True
+
+
+def extra_streamer_names() -> set[str]:
+    return {d["name"] for d in _load_extra_streamers()}
 
 
 def _load_extra_streamers() -> list[dict]:
