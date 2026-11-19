@@ -20,7 +20,10 @@ SHOCK_RE = re.compile(
     r"😱|😨|😮|🤯|😳)", re.I)
 NOISE_RE = re.compile(
     r"^\s*!|\bsubs?\b|subscri|inscri|presente|gift|\bbits?\b|raid|obrigad[oa] pel[oa]|valeu pel[oa]|"
-    r"follow|seguindo|prime", re.I)
+    r"follow|seguindo|prime|"
+    # do gtavi-claudecode (MIT): sorteio, "volto já", patrocínio e links também não são reação
+    r"sorteio|giveaway|\bbrb\b|volto j[aá]|be right back|cupom|patroc|sponsor|discord\.gg|https?://|"
+    r"c[oó]digo promo|promo code", re.I)
 # chat pedindo clipe ("CLIPA", "clip it", "!clip", "corta isso"): quem assiste viu algo que vale corte
 CLIP_RE = re.compile(
     r"(^\s*!clip\b|\bclip+(a+|em|ar|ped|pem)?\b|\bclip\s*(it|that|this|isso|essa)\b|"

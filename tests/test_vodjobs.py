@@ -23,13 +23,14 @@ class Fake:
     def install(self, monkeypatch):
         monkeypatch.setattr(vodjobs, "vod_info", lambda url: (3600.0, "GTA 6 DIA 1", "was_live"))
         monkeypatch.setattr(vodjobs, "chat_replay", self.chat_replay)
+        monkeypatch.setattr(vodjobs, "vod_heatmap", lambda url: [])          # sem internet nos testes
         monkeypatch.setattr(vodjobs, "pick_moments", lambda scores, n: [
             vodjobs.Moment(300.0 * (i + 1), 9 - i) for i in range(self.n)])
         monkeypatch.setattr(vodjobs, "download_section", lambda url, a, b, out: out)
         monkeypatch.setattr(vodjobs, "process_candidate", self.process)
         monkeypatch.setattr(vodjobs, "new_workdir", lambda settings, s: settings.data_dir)
 
-    def chat_replay(self, url, progress=lambda f, n: None, stop=lambda: False, total_s=0.0):
+    def chat_replay(self, url, progress=lambda f, n: None, stop=lambda: False, total_s=0.0, workdir=None):
         self.chat_reads += 1
         msgs = [(float(t), "KEKW") for t in range(0, 3600, 2)]
         progress(1.0, len(msgs))
@@ -149,7 +150,7 @@ def test_no_chat_uses_audio_and_can_pause_mid_download(tmp_path, monkeypatch):
     """Chat da VOD indisponível (Twitch mudou a API): usa o áudio; pausar no meio do download para na hora."""
     f = Fake(n_moments=2)
     f.install(monkeypatch)
-    monkeypatch.setattr(vodjobs, "chat_replay", lambda url, progress, stop, total_s: [])
+    monkeypatch.setattr(vodjobs, "chat_replay", lambda url, progress, stop, total_s, workdir=None: [])
     started = threading.Event()
     downloads = []
 

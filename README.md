@@ -48,7 +48,7 @@ Não precisa marcar nada. Em cada clipe, o Clipador procura o rosto do streamer 
 
 ### Clipar uma live que já acabou (VOD)
 
-No painel, em **Clipar live gravada**, cole o link da VOD (Twitch, YouTube ou Kick): o Clipador **descobre sozinho de quem é** e já escolhe na lista. Se for alguém que não está na lista, ele entra sozinho (fica salvo em `%APPDATA%\ClipadorGTA6\streamers_extra.yaml`). Depois é só escolher quantos clipes quer. Ele lê o replay do chat, acha os picos e baixa só os trechos. Para VOD da Kick, ele usa o volume do áudio.
+No painel, em **Clipar live gravada**, cole o link da VOD (Twitch, YouTube ou Kick): o Clipador **descobre sozinho de quem é** e já escolhe na lista. Na VOD do YouTube ele lê o **replay do chat** pelo yt-dlp e usa o **"Mais repetidos"** (os trechos que a galera mais reviu, quando a VOD já tem audiência) pra achar os melhores momentos. Essas duas ideias vieram do [gtavi-claudecode](https://github.com/Bodila51/gtavi-claudecode) (licença MIT). Se for alguém que não está na lista, ele entra sozinho (fica salvo em `%APPDATA%\ClipadorGTA6\streamers_extra.yaml`). Depois é só escolher quantos clipes quer. Ele lê o replay do chat, acha os picos e baixa só os trechos. Para VOD da Kick, ele usa o volume do áudio.
 
 Pelo terminal também funciona:
 ```

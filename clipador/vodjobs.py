@@ -18,7 +18,7 @@ from typing import Callable
 from .config import Settings, Streamer
 from .pipeline import new_workdir, process_candidate
 from .twitchclips import ClipHit, hits_near, vod_boost
-from .vod import (BUCKET, Moment, Stopped, audio_scores, chat_replay, chat_scores, download_section, pick_moments,
+from .vod import (BUCKET, Moment, Stopped, audio_scores, heatmap_boost, vod_heatmap, chat_replay, chat_scores, download_section, pick_moments,
                   platform_of, vod_info)
 
 log = logging.getLogger(__name__)
@@ -218,7 +218,8 @@ class VodManager:
                                  progress=round(0.02 + 0.38 * frac, 3))
 
                 msgs = chat_replay(url, chat_progress, stop=lambda: tid in self._pause or tid in self._cancel
-                                   or tid not in self.tasks, total_s=total)
+                                   or tid not in self.tasks, total_s=total,
+                                   workdir=Path(self.settings.data_dir) / "vod_tmp" / tid / "chat")
                 self._check(tid)  # leitura interrompida: não salva chat pela metade
                 cache.write_text(json.dumps(msgs, ensure_ascii=False), encoding="utf-8")
                 self._log(tid, f"chat lido: {len(msgs)} mensagens")
@@ -241,6 +242,11 @@ class VodManager:
                     raise _Stop()
                 self._update(tid, stage="ouvindo o áudio da VOD", progress=0.37)
             self._check(tid)
+            # "Mais repetidos" do YouTube: onde a galera voltou pra rever (VOD com uns dias de audiência)
+            heat = vod_heatmap(url)
+            if heat:
+                scores = heatmap_boost(scores, heat)
+                self._log(tid, "🔁 \"Mais repetidos\" do YouTube entra como sinal (onde a galera mais reviu)")
             # clipes que os espectadores fizeram na Twitch (se tiver as chaves da Twitch): mais peso nesses trechos
             scores, hits = vod_boost(url, scores, BUCKET, note=lambda msg: self._log(tid, msg))
             found = sorted(pick_moments(scores, t["top_n"] * 2), key=lambda m: -m.score)  # dobro: IA descarta fracos

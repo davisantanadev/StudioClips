@@ -1,6 +1,7 @@
 """Clipar de live gravada (VOD): acha os picos pelo replay do chat (e/ou áudio) e baixa só os trechos."""
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -34,10 +35,122 @@ def platform_of(url: str) -> str:
     return "twitch" if "twitch.tv" in u else "kick" if "kick.com" in u else "youtube" if "youtu" in u else "vod"
 
 
+def parse_replay_line(line: str) -> list[tuple[float, str]]:
+    """(segundo na VOD, texto) de uma linha do replay de chat do YouTube gravado pelo yt-dlp."""
+    try:
+        obj = json.loads(line)
+    except (ValueError, TypeError):
+        return []
+    a = obj.get("replayChatItemAction") if isinstance(obj, dict) else None
+    if not isinstance(a, dict) or a.get("videoOffsetTimeMsec") is None:
+        return []
+    try:
+        t = int(a["videoOffsetTimeMsec"]) / 1000
+    except (TypeError, ValueError):
+        return []
+    out = []
+    for act in a.get("actions") or []:
+        r = (((act or {}).get("addChatItemAction") or {}).get("item") or {}).get("liveChatTextMessageRenderer")
+        if not r:
+            continue
+        text = "".join(str(x.get("text", "")) if "text" in x else str((x.get("emoji") or {}).get("emojiId", ""))[:4]
+                       for x in (r.get("message") or {}).get("runs") or []).strip()
+        if text:
+            out.append((t, text))
+    return out
+
+
+def _youtube_replay(url: str, progress, stop, total_s: float, workdir: Path | None) -> list[tuple[float, str]]:
+    """Replay do chat de VOD do YouTube pelo yt-dlp (o chat-downloader quebrou em nov/2026).
+    Ideia do gtavi-claudecode (MIT)."""
+    import shutil
+    import tempfile
+    import time
+    own = workdir is None
+    folder = Path(tempfile.mkdtemp(prefix="clipador_vodchat_")) if own else Path(workdir)
+    folder.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.Popen([sys.executable, "-m", "yt_dlp", "--skip-download", "--write-subs", "--sub-langs",
+                             "live_chat", "-o", str(folder / "chat"), url],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+    from .chat.youtube import read_shared
+
+    def read_all() -> list[tuple[float, str]]:
+        msgs = []
+        for f in sorted(folder.glob("chat.live_chat.json*")):
+            if "Frag" in f.name:
+                continue
+            try:
+                data = read_shared(f).decode("utf-8", "replace")
+            except OSError:
+                continue
+            for line in data.splitlines():
+                msgs += parse_replay_line(line)
+        return msgs
+
+    try:
+        while proc.poll() is None:
+            if stop():
+                kill_tree(proc)
+                break
+            time.sleep(3)
+            got = read_all()
+            if got and total_s:
+                progress(min(got[-1][0] / total_s, 1.0), len(got))
+        return read_all()
+    finally:
+        if own:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def vod_heatmap(url: str) -> list[dict]:
+    """"Mais repetidos" do YouTube: [{start_time, end_time, value 0-1}]. Vazio se não tiver (VOD nova/pouco vista)."""
+    if platform_of(url) != "youtube":
+        return []
+    r = subprocess.run([sys.executable, "-m", "yt_dlp", "-J", "--skip-download", url], capture_output=True,
+                       timeout=120, creationflags=NO_WINDOW, **UTF8)
+    try:
+        return list(json.loads(r.stdout).get("heatmap") or [])
+    except (ValueError, AttributeError):
+        return []
+
+
+def heatmap_boost(scores: list[float], heat: list[dict], bucket: float = BUCKET, weight: float = 4.0) -> list[float]:
+    """Soma pontos onde a galera mais reviu o vídeo. O trecho mais revisto ganha `weight` (passa do limite sozinho);
+    o que está na média ou abaixo não ganha nada. Não altera `scores`."""
+    out = list(scores)
+    if not heat:
+        return out
+    vals = [0.0] * len(out)
+    for h in heat:
+        try:
+            a, b, v = float(h["start_time"]), float(h["end_time"]), float(h["value"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        for i in range(int(a // bucket), min(len(out), int(math.ceil(b / bucket)))):
+            vals[i] = max(vals[i], v)
+    covered = sorted(v for v in vals if v > 0)
+    if not covered:
+        return out
+    med, top = statistics.median(covered), covered[-1]
+    if top <= med:
+        return out
+    for i, v in enumerate(vals):
+        out[i] += weight * max(0.0, (v - med) / (top - med))
+    return out
+
+
 def chat_replay(url: str, progress: Callable[[float, int], None] = lambda frac, n: None,
-                stop: Callable[[], bool] = lambda: False, total_s: float = 0.0) -> list[tuple[float, str]]:
-    """(segundo_na_vod, texto) de toda a VOD. Twitch e YouTube; Kick não tem suporte.
+                stop: Callable[[], bool] = lambda: False, total_s: float = 0.0,
+                workdir: Path | None = None) -> list[tuple[float, str]]:
+    """(segundo_na_vod, texto) de toda a VOD. YouTube pelo yt-dlp; Twitch pelo chat-downloader; Kick não tem.
     `progress(fração_da_vod_lida, mensagens)`; `stop()` verdadeiro interrompe (devolve o que leu até ali)."""
+    if platform_of(url) == "youtube":
+        try:
+            msgs = _youtube_replay(url, progress, stop, total_s, workdir)
+            if msgs:
+                return msgs
+        except Exception as e:
+            log.warning("replay de chat do YouTube (yt-dlp) falhou: %s", e)
     try:
         from chat_downloader import ChatDownloader
     except ImportError:
@@ -224,6 +337,10 @@ def clip_vod(url: str, streamer: Streamer, settings: Settings, top_n: int = 6,
     else:
         progress("sem replay de chat — usando o volume do áudio")
         scores = audio_scores(url, tmp, total)
+    heat = vod_heatmap(url)
+    if heat:
+        scores = heatmap_boost(scores, heat)
+        progress("🔁 \"Mais repetidos\" do YouTube entra como sinal")
     from .twitchclips import hits_near, vod_boost
     scores, hits = vod_boost(url, scores, BUCKET, note=progress)
     moments = pick_moments(scores, top_n * 2)  # pega o dobro: a IA descarta os fracos

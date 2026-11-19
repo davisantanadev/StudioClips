@@ -113,3 +113,9 @@ def test_disparo_externo_respeita_o_intervalo():
     assert det.external_fire(1000.0) is True
     assert det.external_fire(1050.0) is False   # dentro do intervalo
     assert det.external_fire(1121.0) is True
+
+def test_ruido_de_chat_nao_conta_como_reacao():
+    for t in ("SORTEIO ROLANDO", "giveaway now", "brb", "volto já", "usa meu cupom", "patrocinado por x",
+              "discord.gg/abc", "https://loja.com", "código promocional"):
+        assert classify(t) == "noise", t
+    assert classify("KKKKK") == "laugh"                     # risada continua contando
