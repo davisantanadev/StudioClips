@@ -126,6 +126,9 @@
             </select></div>
           <label class="check-inline"><input type="checkbox" name="auto_webcam" id="set-autocam"> Achar a webcam do streamer sozinho</label>
           <label class="check-inline"><input type="checkbox" name="require_gta" id="set-gta"> Gravar só quando a live for de GTA</label>
+          <label class="check-inline"><input type="checkbox" name="auto_discover" id="set-discover"> Achar sozinho as lives de GTA mais vistas agora (Twitch, Kick e YouTube), além da lista</label>
+          <div><label class="lbl" for="set-discover-min">Mínimo de pessoas assistindo pra gravar uma live achada sozinha</label>
+            <input id="set-discover-min" name="discover_min_viewers" type="number" min="0" step="500" style="width:140px"></div>
           <button class="primary" type="submit">Salvar</button>
           <div class="hint" id="saved-in">Fica salvo no seu usuário do Windows: atualizar o Clipador não apaga nada.</div>
         </form>
@@ -133,9 +136,10 @@
       <div class="box">
         <h2>Clipar live gravada (VOD)</h2>
         <form id="vod-form">
-          <input name="url" placeholder="Link da VOD (Twitch, YouTube…)" required>
+          <input name="url" placeholder="Link da VOD (Twitch, YouTube, Kick)" required autocomplete="off">
+          <div class="hint" id="vod-who">Cole o link: o Clipador descobre de quem é a live.</div>
           <div class="row">
-            <select name="streamer" class="streamer-select" required></select>
+            <select name="streamer" class="streamer-select" id="vod-streamer" data-auto="1"></select>
             <input name="top_n" type="number" min="1" max="20" value="6" style="width:110px" title="Quantos clipes">
           </div>
           <button class="primary" type="submit">Achar os melhores momentos</button>

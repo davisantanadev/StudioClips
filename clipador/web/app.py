@@ -19,7 +19,7 @@ from .. import db
 from .. import twitchclips
 from ..ai import PROVIDERS, any_key, check_providers, groq_key
 from ..ai import reset_state as reset_ai_state
-from ..config import (QUALITY_HD, QUALITY_LIGHT, QUALITY_MAX, Settings, load_config, save_streamers_enabled, save_user_env,
+from ..config import (QUALITY_HD, QUALITY_LIGHT, QUALITY_MAX, Settings, load_config, save_extra_streamer, save_streamers_enabled, save_user_env,
                       save_user_settings, save_webcam, user_dir)
 from ..pipeline import process_candidate, rerender_card
 from ..recorder import frame_from_file, probe, snapshot
@@ -54,7 +54,7 @@ class IdsIn(BaseModel):
 
 class VodIn(BaseModel):
     url: str
-    streamer: str
+    streamer: str = ""  # vazio: descobre sozinho pelo link de quem é a VOD
     top_n: int = 6
 
 
@@ -74,6 +74,8 @@ class SettingsIn(BaseModel):
     zoom: Literal["aberto", "medio", "fechado"] | None = None
     quality: Literal["max", "hd", "leve"] | None = None
     auto_webcam: bool | None = None
+    auto_discover: bool | None = None
+    discover_min_viewers: int | None = Field(None, ge=0, le=1_000_000)
     groq_key: str | None = Field(None, max_length=2000)
     cerebras_key: str | None = Field(None, max_length=2000)
     gemini_key: str | None = Field(None, max_length=2000)
@@ -149,6 +151,7 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
         return {"keys": {p.name: _hint(p.env) for p in PROVIDERS},
                 "signup": {p.name: p.signup for p in PROVIDERS}, "handle": settings.handle, "min_score": settings.min_score, "card_seconds": settings.card_seconds,
                 "require_gta": settings.require_gta, "zoom": settings.zoom, "auto_webcam": settings.auto_webcam,
+                "auto_discover": settings.auto_discover, "discover_min_viewers": settings.discover_min_viewers,
                 "quality": ("max" if settings.quality == QUALITY_MAX else
                             "hd" if settings.quality.startswith("1080") else "leve"),
                 "groq_key_set": bool(k),
@@ -385,13 +388,41 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
     vods = VodManager(settings, streamers, note)
     app.state.vods = vods
 
+    def identify(url: str) -> dict:
+        from .. import discover
+        f = discover.identify_vod(url)
+        if f is None:
+            return {"found": False}
+        s = discover.match_streamer(f, list(streamers().values()))
+        if s is not None:
+            return {"found": True, "new": False, "name": s.name, "display": s.display, "platform": f.platform}
+        novo = discover.to_streamer(f)
+        return {"found": True, "new": True, "name": novo.name, "display": novo.display, "platform": f.platform,
+                "_streamer": novo}
+
+    @app.get("/api/vod/identify")
+    def vod_identify(url: str):
+        r = identify(url)
+        r.pop("_streamer", None)
+        return r
+
     @app.post("/api/vod")
     def vod(body: VodIn):
-        if not streamers().get(body.streamer):
-            raise HTTPException(404, "streamer desconhecido")
         if not body.url.strip().lower().startswith(("http://", "https://")):
             raise HTTPException(400, "cole o link completo da VOD (https://…)")
-        return {"ok": True, "id": vods.create(body.url, body.streamer, body.top_n)}
+        name = body.streamer
+        if not name:  # descobre de quem é pelo link (e põe na lista se for alguém novo)
+            r = identify(body.url.strip())
+            if not r["found"]:
+                raise HTTPException(400, "não reconheci de quem é esse link — escolha o streamer na lista")
+            if r["new"]:
+                save_extra_streamer(r["_streamer"])
+                if runner:
+                    runner.reload()
+            name = r["name"]
+        if not streamers().get(name):
+            raise HTTPException(404, "streamer desconhecido")
+        return {"ok": True, "id": vods.create(body.url, name, body.top_n)}
 
     @app.get("/api/vods")
     def vod_list():

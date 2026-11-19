@@ -48,7 +48,7 @@ Não precisa marcar nada. Em cada clipe, o Clipador procura o rosto do streamer 
 
 ### Clipar uma live que já acabou (VOD)
 
-No painel, em **Clipar live gravada**, cole o link da VOD (Twitch ou YouTube), escolha o streamer e quantos clipes quer. Ele lê o replay do chat, acha os picos e baixa só os trechos. Para VOD da Kick, ele usa o volume do áudio.
+No painel, em **Clipar live gravada**, cole o link da VOD (Twitch, YouTube ou Kick): o Clipador **descobre sozinho de quem é** e já escolhe na lista. Se for alguém que não está na lista, ele entra sozinho (fica salvo em `%APPDATA%\ClipadorGTA6\streamers_extra.yaml`). Depois é só escolher quantos clipes quer. Ele lê o replay do chat, acha os picos e baixa só os trechos. Para VOD da Kick, ele usa o volume do áudio.
 
 Pelo terminal também funciona:
 ```
@@ -63,6 +63,11 @@ start /wait StudioClips.exe vod https://www.twitch.tv/videos/123456 -s alanzoka 
 .venv\Scripts\python -m clipador status
 ```
 O `teste` gera um clipe a partir de um vídeo seu, usando como pico o segundo informado. O `status` mostra quem está ao vivo agora.
+
+## Quem ele vigia
+
+- **A lista** (`streamers.yaml`): mais de 40 streamers e youtubers conferidos (Alanzoka, Davy Jones no GameplayRJ, Paulinho o LOKO, Piuzinho, Gaules, Kai Cenat, IShowSpeed…), cada um com os canais dele na Twitch, na Kick e no YouTube.
+- **As lives de GTA mais vistas agora**: de 5 em 5 minutos o Clipador olha a categoria de GTA VI na Twitch e na Kick e as lives de "GTA 6" no YouTube, e vigia também as mais vistas que não estão na lista (até 8, com pelo menos 3.000 pessoas assistindo, em português, inglês ou espanhol). No painel elas aparecem como **🔎 achado sozinho**. Liga/desliga e muda o mínimo em **Ferramentas → Configurações**.
 
 ## O que dispara um corte
 

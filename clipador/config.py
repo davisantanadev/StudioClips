@@ -45,6 +45,7 @@ class Streamer:
     channels: list[Channel]
     enabled: bool = True
     webcam: tuple[int, int, int, int] | None = None  # x, y, w, h no frame 1280x720
+    auto: bool = False  # achado sozinho (live de GTA muito vista), não está na lista
 
     @property
     def is_pt(self) -> bool:
@@ -74,6 +75,10 @@ class Settings:
     handle: str = "@seuperfil"
     accent: str = "#FF2E63"
     card_seconds: float = 4.0  # o card some depois disso (0 = fica o vídeo todo)
+    auto_discover: bool = True       # acha sozinho as lives de GTA mais vistas (Twitch, Kick, YouTube)
+    discover_min_viewers: int = 3000 # só quem tem pelo menos isso de gente assistindo
+    discover_max: int = 8            # quantas lives achadas sozinho no máximo
+    discover_langs: list[str] = field(default_factory=lambda: ["pt", "en", "es"])  # idiomas dos achados
     zoom: str = "aberto"       # quanto do jogo aparece: aberto (mais jogo), medio, fechado (jogo enche a tela)
     auto_webcam: bool = True   # acha a webcam sozinho quando ela não foi marcada à mão
     auto_clip: bool = True     # cortes automáticos ligados (o botão Parar/Ligar do painel)
@@ -222,6 +227,32 @@ def load_hashtags(path: Path | None = None) -> list[str]:
     return tags
 
 
+def extra_streamers_path() -> Path:
+    return user_dir() / "streamers_extra.yaml"
+
+
+def save_extra_streamer(s: "Streamer") -> None:
+    """Streamer que entrou pela VOD (não estava na lista): fica salvo na pasta do usuário e passa a valer
+    como os da lista (inclusive ao vivo)."""
+    p = extra_streamers_path()
+    data = (yaml.safe_load(p.read_text(encoding="utf-8")) or []) if p.exists() else []
+    data = [d for d in data if isinstance(d, dict) and d.get("name") != s.name]
+    data.append({"name": s.name, "display": s.display, "lang": s.lang,
+                 "channels": [{"platform": c.platform, "channel": c.channel} for c in s.channels]})
+    p.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def _load_extra_streamers() -> list[dict]:
+    p = extra_streamers_path()
+    if not p.exists():
+        return []
+    try:
+        data = yaml.safe_load(p.read_text(encoding="utf-8")) or []
+    except yaml.YAMLError:
+        return []
+    return [d for d in data if isinstance(d, dict) and d.get("name") and d.get("channels")]
+
+
 def load_config(path: Path | str | None = None) -> tuple[Settings, list[Streamer]]:
     path = Path(path) if path else APP_DIR / "streamers.yaml"
     text = path.read_text(encoding="utf-8-sig") if path.exists() else ""
@@ -244,7 +275,10 @@ def load_config(path: Path | str | None = None) -> tuple[Settings, list[Streamer
         settings.base_hashtags = load_hashtags(path.parent / "hashtags.txt")
     cams = load_webcams(settings)
     streamers: list[Streamer] = []
-    for s in raw.get("streamers") or []:
+    listed = list(raw.get("streamers") or [])
+    names = {s.get("name") for s in listed}
+    listed += [d for d in _load_extra_streamers() if d["name"] not in names]
+    for s in listed:
         chans = []
         for c in s.get("channels") or []:
             if c["platform"] not in PLATFORMS:

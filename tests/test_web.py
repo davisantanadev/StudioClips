@@ -103,3 +103,45 @@ def test_qualidade_maxima(tmp_path):
     r = c.put("/api/settings", json={"quality": "max"}).json()
     assert r["quality"] == "max" and s.quality == "best"
     assert c.put("/api/settings", json={"quality": "hd"}).json()["quality"] == "hd"
+
+def _fake_identify(monkeypatch, found):
+    from clipador import discover as dc
+    monkeypatch.setattr(dc, "identify_vod", lambda url: found)
+    return dc
+
+
+def test_identifica_o_dono_da_vod_que_esta_na_lista(tmp_path, monkeypatch):
+    dc = _fake_identify(monkeypatch, None)
+    dc_found = dc.Found("youtube", "UCJAbkIY17zAmCTNQHH0bQoQ", "Gameplayrj", 0, "pt")
+    monkeypatch.setattr(dc, "identify_vod", lambda url: dc_found)
+    _, c = _client(tmp_path)
+    r = c.get("/api/vod/identify", params={"url": "https://www.youtube.com/watch?v=abc123XYZ_-"}).json()
+    assert r["name"] == "davyjones" and r["display"] == "Davy Jones" and r["new"] is False
+
+
+def test_vod_de_quem_nao_esta_na_lista_entra_sozinho(tmp_path, monkeypatch):
+    dc = _fake_identify(monkeypatch, None)
+    monkeypatch.setattr(dc, "identify_vod", lambda url: dc.Found("twitch", "fulanogamer", "FulanoGamer", 0, "pt"))
+    s, c = _client(tmp_path)
+    r = c.get("/api/vod/identify", params={"url": "https://www.twitch.tv/videos/1"}).json()
+    assert r["new"] is True and r["display"] == "FulanoGamer" and r["platform"] == "twitch"
+    created = []
+    monkeypatch.setattr(type(c.app.state.vods), "create", lambda self, url, st, n=6: created.append(st) or "t1")
+    assert c.post("/api/vod", json={"url": "https://www.twitch.tv/videos/1", "top_n": 3}).status_code == 200
+    assert created == ["fulanogamer"]
+    assert any(x["name"] == "fulanogamer" for x in c.get("/api/streamers").json())   # agora está na lista
+
+
+def test_vod_sem_dono_reconhecido_pede_pra_escolher(tmp_path, monkeypatch):
+    _fake_identify(monkeypatch, None)
+    _, c = _client(tmp_path)
+    assert c.get("/api/vod/identify", params={"url": "https://exemplo.com/x"}).json()["found"] is False
+    r = c.post("/api/vod", json={"url": "https://exemplo.com/x"})
+    assert r.status_code == 400 and "escolha" in r.json()["detail"]
+
+
+def test_ligar_e_desligar_descoberta_no_painel(tmp_path):
+    s, c = _client(tmp_path)
+    assert c.get("/api/settings").json()["auto_discover"] is True
+    r = c.put("/api/settings", json={"auto_discover": False, "discover_min_viewers": 10000}).json()
+    assert r["auto_discover"] is False and r["discover_min_viewers"] == 10000 and s.auto_discover is False

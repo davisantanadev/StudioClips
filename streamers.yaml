@@ -4,6 +4,8 @@
 # Cada streamer pode ter vários canais (Twitch, Kick, YouTube); o sistema grava o primeiro que estiver
 # ao vivo, então ponha primeiro a plataforma principal dele. No YouTube vale @handle ou o ID do canal (UC…).
 # Canais conferidos nas plataformas em 19/11/2026. Quem não estiver jogando GTA não é gravado (require_gta).
+# Além desta lista, o Clipador acha sozinho as lives de GTA mais vistas do momento (Twitch, Kick e YouTube):
+# liga/desliga em Ferramentas → Configurações. Streamer que entra por VOD fica salvo em %APPDATA%\ClipadorGTA6.
 
 settings:
   pre_s: 43            # segundos antes do pico (sem IA)
@@ -69,6 +71,7 @@ streamers:
     lang: pt
     channels:
       - {platform: twitch, channel: gaules}
+      - {platform: youtube, channel: UC5ZTRH1zclthyc6b_D3m2Pw}
   - name: casimiro
     display: Casimiro
     lang: pt
@@ -136,6 +139,16 @@ streamers:
     lang: pt
     channels:
       - {platform: twitch, channel: bistecone}
+  - name: skorpiongamer
+    display: Skorpion Gamer
+    lang: pt
+    channels:
+      - {platform: youtube, channel: UCHDV3JN5aqxAy9hwTTVHJow}
+  - name: ricfazeres
+    display: RicFazeres
+    lang: pt
+    channels:
+      - {platform: youtube, channel: UC7I9vRncx1-vox41l1A0ACQ}
 
   # ---------- gringos (legenda traduzida pra PT-BR) ----------
   - name: xqc
@@ -149,6 +162,13 @@ streamers:
     lang: en
     channels:
       - {platform: twitch, channel: kaicenat}
+      - {platform: youtube, channel: UCvCfpQXRXdJdL07pzTIA6Cw}   # Kai Cenat Live
+  - name: ohnepixel
+    display: ohnePixel
+    lang: en
+    channels:
+      - {platform: twitch, channel: ohnepixel}
+      - {platform: youtube, channel: UC3ti8PjJczdDKHSwk7TESkw}
   - name: ishowspeed
     display: IShowSpeed
     lang: en

@@ -230,7 +230,7 @@ async function loadStatus() {
   $("#live-count").textContent = s.live.length;
   $("#lives").innerHTML = s.live.length ? s.live.map((l) => `
     <div class="live"><span class="dot"></span>
-      <div class="grow"><b>${esc(l.display)}</b> <span class="hint">${esc(PLAT[l.platform] || l.platform)} · buffer ${l.buffer_s}s · ${l.chat_msgs} msgs</span>
+      <div class="grow"><b>${esc(l.display)}</b> <span class="hint">${esc(PLAT[l.platform] || l.platform)} · buffer ${l.buffer_s}s · ${l.chat_msgs} msgs${l.auto ? " · 🔎 achado sozinho" : ""}</span>
         <div class="meta">${esc(l.title)}</div></div>
       <button data-cut="${esc(l.name)}" title="A IA analisa os últimos ~2 min e corta o melhor trecho">✂️ Cortar agora</button>
     </div>`).join("") : `<div class="empty">${!s.auto ? "Cortes parados: ninguém está sendo gravado."
@@ -253,6 +253,8 @@ async function loadSettings() {
   $("#set-zoom").value = s.zoom;
   $("#set-quality").value = s.quality;
   $("#set-autocam").checked = s.auto_webcam;
+  $("#set-discover").checked = s.auto_discover;
+  $("#set-discover-min").value = s.discover_min_viewers;
   $$(".key-state").forEach((el) => { const h = s.keys[el.dataset.p]; el.textContent = h ? `· salva (${h})` : "· sem chave"; });
   $$(".signup").forEach((a) => (a.href = s.signup[a.dataset.p]));
   $("#saved-in").textContent = `Fica salvo em ${s.saved_in} — atualizar o Clipador não apaga nada.`;
@@ -264,7 +266,8 @@ $("#settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   const body = { handle: fd.get("handle").trim(), min_score: +fd.get("min_score"), require_gta: $("#set-gta").checked,
-    zoom: fd.get("zoom"), quality: fd.get("quality"), auto_webcam: $("#set-autocam").checked };
+    zoom: fd.get("zoom"), quality: fd.get("quality"), auto_webcam: $("#set-autocam").checked,
+    auto_discover: $("#set-discover").checked, discover_min_viewers: +fd.get("discover_min_viewers") || 0 };
   for (const k of ["groq_key", "cerebras_key", "gemini_key", "twitch_client_id", "twitch_client_secret"]) if (fd.get(k).trim()) body[k] = fd.get(k).trim();
   try {
     await api("/api/settings", { method: "PUT", body: JSON.stringify(body) });
@@ -346,14 +349,34 @@ async function loadStreamers() {
   const st = await api("/api/streamers");
   state.streamers = st; renderControl();
   const opts = st.map((s) => `<option value="${esc(s.name)}">${esc(s.display)}</option>`).join("");
-  $$(".streamer-select").forEach((el) => (el.innerHTML = opts));
+  $$(".streamer-select").forEach((el) => (el.innerHTML = (el.dataset.auto ? `<option value="">🔎 Descobrir pelo link</option>` : "") + opts));
   $("#filter").innerHTML = `<option value="">Todos os streamers</option>` + opts;
 }
+// cola o link da VOD → descobre de quem é (Twitch, Kick, YouTube) e já escolhe na lista
+let whoTimer = null, whoUrl = "";
+$("#vod-form [name=url]").addEventListener("input", (e) => {
+  clearTimeout(whoTimer);
+  const url = e.target.value.trim();
+  if (!/^https?:\/\//i.test(url)) { $("#vod-who").textContent = "Cole o link: o Clipador descobre de quem é a live."; return; }
+  whoTimer = setTimeout(async () => {
+    whoUrl = url;
+    $("#vod-who").textContent = "🔎 vendo de quem é…";
+    try {
+      const r = await api("/api/vod/identify?url=" + encodeURIComponent(url));
+      if (whoUrl !== url) return;
+      const plat = PLAT[r.platform] || r.platform || "";
+      if (!r.found) { $("#vod-who").textContent = "Não reconheci de quem é esse link — escolha o streamer na lista."; return; }
+      if (r.new) { $("#vod-streamer").value = ""; $("#vod-who").textContent = `🆕 ${r.display} (${plat}) — não está na lista, vai entrar sozinho`; }
+      else { $("#vod-streamer").value = r.name; $("#vod-who").textContent = `✅ ${r.display} (${plat})`; }
+    } catch { $("#vod-who").textContent = "Não deu pra ver de quem é agora — escolha na lista ou deixe em Descobrir."; }
+  }, 600);
+});
 $("#vod-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   try {
-    await api("/api/vod", { method: "POST", body: JSON.stringify({ url: fd.get("url"), streamer: fd.get("streamer"), top_n: +fd.get("top_n") }) });
+    await api("/api/vod", { method: "POST", body: JSON.stringify({ url: fd.get("url"), streamer: fd.get("streamer") || "", top_n: +fd.get("top_n") }) });
+    if (!fd.get("streamer")) loadStreamers();  // quem era novo agora está na lista
     toast("VOD na fila — acompanhe logo abaixo"); e.target.querySelector("[name=url]").value = ""; loadVods();
   } catch (err) { toast("Erro: " + err.message); }
 });

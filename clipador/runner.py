@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from .chat import ChatReader, make_reader
-from .config import Settings, Streamer, load_config
+from .config import Settings, Streamer, load_config, load_user_settings
 from .cutter import cut_clip
 from .detector import HypeDetector, describe
 from .pipeline import new_workdir, process_candidate
@@ -20,6 +20,7 @@ from . import twitchclips
 log = logging.getLogger(__name__)
 SEGMENT_S = 10
 KEEP_SEGMENTS = 36  # 6 min: o momento não some do buffer enquanto espera na fila
+DISCOVER_S = 300    # de 5 em 5 min procura as lives de GTA mais vistas (Twitch, Kick, YouTube)
 CLIPS_POLL_S = 45   # ao vivo na Twitch: de quanto em quanto tempo olha os clipes novos dos espectadores
 PARALLEL_JOBS = 2   # clipes editados ao mesmo tempo
 
@@ -128,7 +129,7 @@ class StreamerWorker:
         return {"name": self.streamer.name, "display": self.streamer.display,
                 "platform": self.info.channel.platform, "title": self.info.title,
                 "category": self.info.category, "buffer_s": round(sum(s.dur for s in segs)),
-                "chat_msgs": self.msgs_total, "since": self.started}
+                "chat_msgs": self.msgs_total, "since": self.started, "auto": self.streamer.auto}
 
 
 class Runner:
@@ -142,6 +143,8 @@ class Runner:
         self._stop = threading.Event()
         self._wake = threading.Event()  # acorda o vigia na hora (Ligar, marcar streamer)
         self._lock = threading.Lock()
+        self._next_discover = 0.0
+        self._announced: set[str] = set()
 
     # ---------- API p/ o painel ----------
     def note(self, msg: str) -> None:
@@ -219,6 +222,32 @@ class Runner:
                   + (f" ({why})" if why else "") + " — na fila")
         self.jobs.put(job)
 
+    def refresh_discovered(self, now: float | None = None) -> None:
+        """Junta à lista as lives de GTA mais vistas agora (Twitch, Kick, YouTube) que não estão nela.
+        Quem esfriou sai na próxima procura, menos quem está gravando (esse vai até a live acabar)."""
+        now = time.time() if now is None else now
+        if self.settings.auto_discover and now < self._next_discover:
+            return
+        autos: list[Streamer] = []
+        if self.settings.auto_discover:
+            self._next_discover = now + DISCOVER_S
+            from . import discover
+            fixed = [s for s in self.streamers.values() if not s.auto]
+            disabled = {k for k, v in (load_user_settings().get("streamers_enabled") or {}).items() if not v}
+            autos = discover.merge(fixed, discover.discover_all(), self.settings.discover_min_viewers,
+                                   self.settings.discover_max, disabled, set(self.settings.discover_langs) or None)
+        with self._lock:
+            recording = {n: s for n, s in self.streamers.items() if s.auto and n in self.workers}
+            for n in [n for n, s in self.streamers.items() if s.auto]:
+                self.streamers.pop(n)
+            self.streamers.update(recording)
+            for s in autos:
+                self.streamers.setdefault(s.name, s)
+        fresh = [s.display for s in autos if s.name not in self._announced]
+        self._announced.update(s.name for s in autos)
+        if fresh:
+            self.note("🔎 lives de GTA bombando, vou vigiar também: " + ", ".join(fresh))
+
     def _probe_streamer(self, s: Streamer) -> LiveInfo | None:
         for ch in s.channels:
             info = probe(ch)
@@ -237,17 +266,22 @@ class Runner:
             if not self.settings.auto_clip:  # parado: não procura ninguém até apertar Ligar
                 self._wake.wait(60)
                 continue
-            candidates = [s for s in self.streamers.values() if s.enabled and s.name not in self.workers]
+            try:
+                self.refresh_discovered()
+            except Exception:
+                log.exception("procura de lives")
+            candidates = [s for s in list(self.streamers.values()) if s.enabled and s.name not in self.workers]
             for s, info in zip(candidates, pool.map(self._probe_streamer, candidates)):
                 if info is None:
                     continue
                 if self.settings.require_gta and not info.is_gta:
                     continue
                 # o usuário pode ter parado ou desmarcado enquanto checávamos quem está ao vivo
-                if not self.settings.auto_clip or not self.streamers[s.name].enabled:
+                if not self.settings.auto_clip or s.name not in self.streamers or not self.streamers[s.name].enabled:
                     continue
                 if len(self.workers) >= self.settings.max_live:
-                    self.note(f"limite de {self.settings.max_live} lives — {s.display} ficou de fora")
+                    if not s.auto:  # os achados sozinho ficam de fora em silêncio
+                        self.note(f"limite de {self.settings.max_live} lives — {s.display} ficou de fora")
                     continue
                 w = StreamerWorker(s, info, self.settings, self._enqueue)
                 try:
