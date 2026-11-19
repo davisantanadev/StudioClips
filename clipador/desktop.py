@@ -9,6 +9,26 @@ import logging
 
 log = logging.getLogger(__name__)
 TITLE = "StudioClips — Clipador GTA 6"
+APP_ID = "StudioClips.Clipador"
+
+
+def icon_path():
+    from .config import RES_DIR
+    p = RES_DIR / "assets" / "studioclips.ico"
+    return p if p.exists() else None
+
+
+def set_taskbar_identity() -> bool:
+    """Sem isto, rodando pelo pythonw (INICIAR.bat) a barra de tarefas agrupa a janela com o Python e mostra
+    o ícone dele. Com um AppUserModelID próprio, ela mostra o ícone da janela (o do StudioClips)."""
+    import sys
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        return ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID) == 0
+    except Exception:
+        return False
 
 
 def available() -> bool:
@@ -30,7 +50,10 @@ def open_window(url: str, storage_dir=None) -> bool:
         webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True   # "criar chave grátis" abre no navegador
         webview.create_window(TITLE, url, width=1360, height=880, min_size=(900, 600),
                               background_color="#0B0B0F")
-        webview.start(private_mode=False, storage_path=str(storage_dir) if storage_dir else None)
+        set_taskbar_identity()
+        icon = icon_path()
+        webview.start(private_mode=False, storage_path=str(storage_dir) if storage_dir else None,
+                      icon=str(icon) if icon else None)
         return True
     except Exception:
         log.exception("não deu pra abrir a janela do painel — usando o navegador")

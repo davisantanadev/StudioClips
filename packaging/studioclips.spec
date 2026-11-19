@@ -17,6 +17,7 @@ hidden = (
 datas = [
     (os.path.join(ROOT, "assets", "fonts"), os.path.join("assets", "fonts")),
     (os.path.join(ROOT, "assets", "models"), os.path.join("assets", "models")),
+    (os.path.join(ROOT, "assets", "studioclips.ico"), "assets"),  # ícone da janela e da barra de tarefas
     (os.path.join(ROOT, "clipador", "web", "static"), os.path.join("clipador", "web", "static")),
     (os.path.join(ROOT, "clipador", "defaults"), os.path.join("clipador", "defaults")),
 ]
@@ -41,7 +42,7 @@ exe = EXE(
     exclude_binaries=True,
     name="StudioClips",
     console=False,
-    icon=os.path.join(ROOT, "assets", "clipador.ico"),
+    icon=os.path.join(ROOT, "assets", "studioclips.ico"),
     upx=False,
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="StudioClips", upx=False)
