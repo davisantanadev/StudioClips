@@ -83,3 +83,26 @@ def test_generic_card_detected():
     assert is_generic_card(["Alanzoka no GTA 6"], "Alanzoka")
     assert is_generic_card(["Momento insano do Alanzoka"], "Alanzoka")
     assert not is_generic_card(["Alanzoka roubou a viatura", "e fugiu da polícia pelo mar"], "Alanzoka")
+
+
+def test_fala_marca_quando_o_streamer_pede_clipe():
+    from clipador.ai import Seg, Transcript
+    from clipador.selector import fala_text
+    t = Transcript("pt", [Seg(0, 2, "vou entrar no carro", []), Seg(2, 4, "CLIPA ISSO, CLIPA!", [])])
+    linhas = fala_text(t).splitlines()
+    assert linhas[0] == "[0.0-2.0] vou entrar no carro"
+    assert linhas[1] == "[2.0-4.0] [CLIPA] CLIPA ISSO, CLIPA!"
+    assert fala_text(Transcript("pt", [])) == "(sem fala, só gritos/música)"
+
+def test_duracao_elastica_ideal_1_min_e_pode_ir_ate_90(monkeypatch):
+    seen = {}
+
+    def fake(system, user, model, **k):
+        seen["user"] = user
+        return {"candidatos": [{"inicio": 5, "fim": 95, "nota": 9, "motivo": "história longa", "card": ["a"],
+                                "titulo": "t"}]}
+    monkeypatch.setattr(ai, "chat_json", fake)
+    sel = select_moment(_tr(), [], 70, 115, display="Alanzoka", live_title="", min_s=45, max_s=90, ideal_s=60,
+                        model="x")
+    assert 85 <= sel.dur <= 90                      # a IA pediu 90 s e pode
+    assert "52 a 60" in seen["user"] and "até 90" in seen["user"]

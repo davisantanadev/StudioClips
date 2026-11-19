@@ -256,6 +256,8 @@ async function loadSettings() {
   $$(".key-state").forEach((el) => { const h = s.keys[el.dataset.p]; el.textContent = h ? `· salva (${h})` : "· sem chave"; });
   $$(".signup").forEach((a) => (a.href = s.signup[a.dataset.p]));
   $("#saved-in").textContent = `Fica salvo em ${s.saved_in} — atualizar o Clipador não apaga nada.`;
+  $("#twitch-state").textContent = s.twitch.set ? `· salva (${s.twitch.id_hint})` : "· desligado";
+  $("#twitch-signup").href = s.twitch.signup;
   return s;
 }
 $("#settings-form").addEventListener("submit", async (e) => {
@@ -263,10 +265,10 @@ $("#settings-form").addEventListener("submit", async (e) => {
   const fd = new FormData(e.target);
   const body = { handle: fd.get("handle").trim(), min_score: +fd.get("min_score"), require_gta: $("#set-gta").checked,
     zoom: fd.get("zoom"), quality: fd.get("quality"), auto_webcam: $("#set-autocam").checked };
-  for (const k of ["groq_key", "cerebras_key", "gemini_key"]) if (fd.get(k).trim()) body[k] = fd.get(k).trim();
+  for (const k of ["groq_key", "cerebras_key", "gemini_key", "twitch_client_id", "twitch_client_secret"]) if (fd.get(k).trim()) body[k] = fd.get(k).trim();
   try {
     await api("/api/settings", { method: "PUT", body: JSON.stringify(body) });
-    ["#set-key", "#set-cerebras", "#set-gemini"].forEach((s) => ($(s).value = ""));
+    ["#set-key", "#set-cerebras", "#set-gemini", "#set-twitch-id", "#set-twitch-secret"].forEach((s) => ($(s).value = ""));
     await loadSettings(); toast("Configurações salvas"); loadStatus();
   } catch (err) { toast("Erro: " + err.message); }
 });
@@ -278,6 +280,11 @@ $("#test-key").addEventListener("click", async () => {
     $("#test-res").textContent = Object.entries(r.providers).map(([k, v]) => `${PNAME[k]}: ${v}`).join(" · ");
     toast("✅ IA funcionando");
   } catch (err) { $("#test-res").textContent = ""; toast("❌ " + err.message); }
+});
+$("#test-twitch").addEventListener("click", async () => {
+  $("#twitch-res").textContent = "testando…";
+  try { await api("/api/settings/test-twitch", { method: "POST" }); $("#twitch-res").textContent = "ok"; toast("✅ Twitch funcionando"); }
+  catch (err) { $("#twitch-res").textContent = ""; toast("❌ " + err.message); }
 });
 function renderAlert(s) {
   const msgs = [];

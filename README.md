@@ -64,6 +64,13 @@ start /wait StudioClips.exe vod https://www.twitch.tv/videos/123456 -s alanzoka 
 ```
 O `teste` gera um clipe a partir de um vídeo seu, usando como pico o segundo informado. O `status` mostra quem está ao vivo agora.
 
+## O que dispara um corte
+
+- **Chat explodindo com reação:** risada (KKKK, KEKW), susto (WTF, ???) ou o streamer gritando.
+- **Chat pedindo clipe:** várias pessoas mandando "CLIPA", "clip it", "!clip" ou "corta isso" ao mesmo tempo.
+- **Clipes da Twitch (opcional):** quando 2 ou mais espectadores criam clipes do mesmo trecho em ~2 minutos, o Clipador corta esse momento. Na VOD da Twitch, os trechos que viraram clipe ganham prioridade. Para ligar, crie um app grátis em <https://dev.twitch.tv/console/apps> (nome qualquer, URL `http://localhost`, categoria "Other"), gere um Client Secret e cole o Client ID e o Secret em **Ferramentas → Configurações** (botão **Testar Twitch**). Eles ficam em `%APPDATA%\ClipadorGTA6\.env`, nunca no repositório.
+- **Kick:** o chat da Kick funciona de novo. A Kick troca a chave do chat de tempos em tempos, e o Clipador pergunta a chave atual a cada conexão.
+
 ## IA grátis e sem limite de clipes
 
 Não há limite de clipes por hora: cada streamer só tem um intervalo mínimo entre clipes (pra não repetir o mesmo momento), e 2 clipes são editados ao mesmo tempo.
@@ -77,7 +84,7 @@ Cole as chaves em **Ferramentas → Configurações** e clique em **Testar chave
 
 ## Como a IA escolhe o corte
 
-Quando o chat explode, o sistema pega cerca de 2 minutos ao redor do momento (90 s antes e 25 s depois) e transcreve tudo com o Whisper large-v3. A IA do Groq lê a fala e o chat como um editor exigente: propõe até 3 cortes, cada um com **contexto → acontecimento → reação**, dá uma **nota de 0 a 10** a cada um e fica com o melhor. O corte mira **perto de 1 minuto** (52 a 60 s) e só fica mais curto (mínimo 45 s) se o resto for enrolação. Começa e termina em frase inteira.
+Quando o chat explode, o sistema pega cerca de 2 minutos ao redor do momento (90 s antes e 25 s depois) e transcreve tudo com o Whisper large-v3. A IA do Groq lê a fala e o chat como um editor exigente: propõe até 3 cortes, cada um com **contexto → acontecimento → reação**, dá uma **nota de 0 a 10** a cada um e fica com o melhor. O corte mira **perto de 1 minuto** (52 a 60 s), só fica mais curto (mínimo 45 s) se o resto for enrolação e só passa de 1 minuto (**até 90 s**) quando a história precisa de mais contexto ou a reação continua forte. Se o streamer falar "clipa isso", "clip that" ou "corta isso", a IA trata como sinal forte. Começa e termina em frase inteira.
 
 Clipes com nota abaixo de `min_score` (padrão **7**) são descartados; o painel mostra o motivo em "Ao vivo". O botão "Cortar agora" e o teste nunca descartam.
 
@@ -101,7 +108,7 @@ O jogo sempre sai **em pé**, nunca como faixa deitada. O Clipador olha o clipe 
 | Campo | O que faz |
 |---|---|
 | `pre_s` / `post_s` | segundos antes e depois do pico quando a IA não está disponível (padrão 43 + 15) |
-| `min_clip_s` / `max_clip_s` | duração mínima e máxima do clipe (padrão 45 e 60 s) |
+| `min_clip_s` / `ideal_clip_s` / `max_clip_s` | duração mínima, ideal e máxima do clipe (padrão 45, 60 e 90 s; teto 90) |
 | `min_score` | nota mínima da IA pra virar clipe (padrão 7; menor = mais clipes, maior = só os melhores). Também muda no painel |
 | `hype_threshold` | sensibilidade: menor gera mais clipes (2.5), maior gera só os momentos enormes (4) |
 | `cooldown_s` | tempo mínimo entre dois clipes do mesmo streamer |

@@ -95,6 +95,17 @@
             <a class="signup" data-p="gemini" target="_blank" rel="noopener">criar chave grátis</a></label>
           <input id="set-gemini" name="gemini_key" type="password" autocomplete="off" placeholder="AIza… (opcional)">
           <div class="row"><button type="button" id="test-key">Testar chaves</button><span class="hint" id="test-res"></span></div>
+          <div class="hint">Opcional. <b>Clipes da Twitch:</b> quando vários espectadores clipam um trecho, o Clipador corta
+            esse momento (ao vivo e em VOD). Crie um app grátis (nome qualquer, URL <code>http://localhost</code>, categoria
+            "Other") e cole o Client ID e um Client Secret. <span class="hint" id="twitch-state"></span>
+            <a id="twitch-signup" target="_blank" rel="noopener">criar app na Twitch</a></div>
+          <div class="row">
+            <div class="grow"><label class="lbl" for="set-twitch-id">Twitch Client ID</label>
+              <input id="set-twitch-id" name="twitch_client_id" type="password" autocomplete="off" placeholder="(opcional)"></div>
+            <div class="grow"><label class="lbl" for="set-twitch-secret">Twitch Client Secret</label>
+              <input id="set-twitch-secret" name="twitch_client_secret" type="password" autocomplete="off" placeholder="(opcional)"></div>
+          </div>
+          <div class="row"><button type="button" id="test-twitch">Testar Twitch</button><span class="hint" id="twitch-res"></span></div>
           <div class="row">
             <div class="grow"><label class="lbl" for="set-handle">Seu @ (marca d'água)</label>
               <input id="set-handle" name="handle" maxlength="40" placeholder="@seuperfil"></div>
@@ -109,7 +120,8 @@
             </select></div>
           <div><label class="lbl" for="set-quality">Qualidade da gravação</label>
             <select id="set-quality" name="quality">
-              <option value="hd">HD 1080p: webcam nítida (mais internet)</option>
+              <option value="max">Máxima: a melhor que a live tiver (YouTube até 1440p/4K, muita internet)</option>
+              <option value="hd">HD 1080p60: webcam nítida (recomendado)</option>
               <option value="leve">Leve 720p: gasta metade da internet</option>
             </select></div>
           <label class="check-inline"><input type="checkbox" name="auto_webcam" id="set-autocam"> Achar a webcam do streamer sozinho</label>

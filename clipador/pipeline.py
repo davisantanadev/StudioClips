@@ -148,7 +148,7 @@ def process_candidate(streamer: Streamer, analysis: Path, peak_offset: float, se
                       platform: str = "", live_title: str = "", chat: list[tuple[float, str]] | None = None,
                       workdir: Path | None = None, manual: bool = False,
                       note=lambda m: log.info(m), signals: dict | None = None) -> db.Clip | None:
-    """Janela longa (~2 min) → IA escolhe o melhor trecho de 40–60 s → clipe. None se a IA achar fraco.
+    """Janela longa (~2 min) → IA escolhe o melhor trecho (~1 min, até 90 s) → clipe. None se a IA achar fraco.
     `signals`: por que o detector disparou (risada/susto/grito), pra IA saber que tipo de momento é."""
     workdir = workdir or new_workdir(settings, streamer)
     t0 = time.time()
@@ -158,7 +158,7 @@ def process_candidate(streamer: Streamer, analysis: Path, peak_offset: float, se
                          whisper_prompt(streamer.display, streamer.lang))
     sel = select_moment(tr_full, chat, peak_offset, total, display=streamer.display, live_title=live_title,
                         min_s=settings.min_clip_s, max_s=settings.max_clip_s, model=settings.groq_text_model,
-                        signals=describe(signals))
+                        signals=describe(signals), ideal_s=settings.ideal_clip_s)
     (workdir / "selecao.json").write_text(json.dumps(vars(sel), ensure_ascii=False, indent=1), encoding="utf-8")
     if sel.by_ai and sel.score is not None and sel.score < settings.min_score and not manual:
         note(f"🗑 {streamer.display}: momento fraco (nota {sel.score:.0f}) — {sel.reason}")

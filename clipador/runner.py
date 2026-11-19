@@ -15,10 +15,12 @@ from .cutter import cut_clip
 from .detector import HypeDetector, describe
 from .pipeline import new_workdir, process_candidate
 from .recorder import LiveInfo, Recorder, loudness_per_second, probe
+from . import twitchclips
 
 log = logging.getLogger(__name__)
 SEGMENT_S = 10
 KEEP_SEGMENTS = 36  # 6 min: o momento não some do buffer enquanto espera na fila
+CLIPS_POLL_S = 45   # ao vivo na Twitch: de quanto em quanto tempo olha os clipes novos dos espectadores
 PARALLEL_JOBS = 2   # clipes editados ao mesmo tempo
 
 
@@ -62,6 +64,7 @@ class StreamerWorker:
                                  settings.quality, SEGMENT_S, KEEP_SEGMENTS, on_segment=self._on_segment)
         self.chat: ChatReader = make_reader(info.channel, self._on_msg)
         self._stop = threading.Event()
+        self._clips_seen: set[str] = set()
 
     def _on_msg(self, ts: float, text: str) -> None:
         self.msgs_total += 1
@@ -76,6 +79,8 @@ class StreamerWorker:
         self.recorder.start()
         self.chat.start()
         threading.Thread(target=self._loop, daemon=True, name=f"det-{self.streamer.name}").start()
+        if self.info.channel.platform == "twitch":
+            threading.Thread(target=self._clips_loop, daemon=True, name=f"clips-{self.streamer.name}").start()
         log.info("🔴 gravando %s (%s) — %s", self.streamer.display, self.info.channel.platform, self.info.title)
 
     def stop(self) -> None:
@@ -94,6 +99,29 @@ class StreamerWorker:
             peak = self.detector.check()
             if peak is not None:
                 self.enqueue(Job(self, peak, signals=dict(self.detector.last_signals)))
+
+    def _clips_loop(self) -> None:
+        """Vários espectadores clipando ao mesmo tempo = momento bom. Sem as chaves da Twitch, não faz nada."""
+        while not self._stop.wait(CLIPS_POLL_S):
+            self.poll_twitch_clips()
+
+    def poll_twitch_clips(self, now: float | None = None) -> bool:
+        h = twitchclips.helix()
+        if h is None:
+            return False
+        now = time.time() if now is None else now
+        try:
+            clips = h.recent_clips(self.info.channel.channel)
+        except Exception as e:
+            log.debug("clipes da Twitch de %s: %s", self.streamer.name, e)
+            return False
+        got = twitchclips.live_burst(clips, self._clips_seen, now)
+        if not got or not self.detector.external_fire(now):
+            return False
+        moment, n, views = got
+        self.enqueue(Job(self, moment, signals={"kind": "clipado na Twitch", "twitch_clips": n,
+                                                "twitch_views": views}))
+        return True
 
     def status(self) -> dict:
         segs = self.recorder.segments()

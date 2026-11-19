@@ -224,6 +224,8 @@ def clip_vod(url: str, streamer: Streamer, settings: Settings, top_n: int = 6,
     else:
         progress("sem replay de chat — usando o volume do áudio")
         scores = audio_scores(url, tmp, total)
+    from .twitchclips import hits_near, vod_boost
+    scores, hits = vod_boost(url, scores, BUCKET, note=progress)
     moments = pick_moments(scores, top_n * 2)  # pega o dobro: a IA descarta os fracos
     if not moments:
         progress("nenhum pico forte encontrado nessa VOD")
@@ -239,8 +241,10 @@ def clip_vod(url: str, streamer: Streamer, settings: Settings, top_n: int = 6,
             wd = new_workdir(settings, streamer)
             raw = download_section(url, start, end, wd / "analysis.mp4")
             chat = [(x - start, t) for (x, t) in msgs if start <= x <= end]
+            n_clips, views = hits_near(hits, m.t)
             clip = process_candidate(streamer, raw, m.t - start, settings, platform=platform_of(url),
-                                     live_title=title, chat=chat, workdir=wd, note=progress)
+                                     live_title=title, chat=chat, workdir=wd, note=progress,
+                                     signals={"twitch_clips": n_clips, "twitch_views": views} if n_clips else None)
             if clip:
                 done += 1
                 progress(f"✅ VOD {streamer.display}: {done}/{top_n} pronto")

@@ -16,9 +16,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .. import db
+from .. import twitchclips
 from ..ai import PROVIDERS, any_key, check_providers, groq_key
 from ..ai import reset_state as reset_ai_state
-from ..config import (QUALITY_HD, QUALITY_LIGHT, Settings, load_config, save_streamers_enabled, save_user_env,
+from ..config import (QUALITY_HD, QUALITY_LIGHT, QUALITY_MAX, Settings, load_config, save_streamers_enabled, save_user_env,
                       save_user_settings, save_webcam, user_dir)
 from ..pipeline import process_candidate, rerender_card
 from ..recorder import frame_from_file, probe, snapshot
@@ -71,11 +72,13 @@ class SettingsIn(BaseModel):
     card_seconds: float | None = Field(None, ge=0, le=60)
     require_gta: bool | None = None
     zoom: Literal["aberto", "medio", "fechado"] | None = None
-    quality: Literal["hd", "leve"] | None = None
+    quality: Literal["max", "hd", "leve"] | None = None
     auto_webcam: bool | None = None
     groq_key: str | None = Field(None, max_length=2000)
     cerebras_key: str | None = Field(None, max_length=2000)
     gemini_key: str | None = Field(None, max_length=2000)
+    twitch_client_id: str | None = Field(None, max_length=200)
+    twitch_client_secret: str | None = Field(None, max_length=200)
 
 
 def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
@@ -146,9 +149,12 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
         return {"keys": {p.name: _hint(p.env) for p in PROVIDERS},
                 "signup": {p.name: p.signup for p in PROVIDERS}, "handle": settings.handle, "min_score": settings.min_score, "card_seconds": settings.card_seconds,
                 "require_gta": settings.require_gta, "zoom": settings.zoom, "auto_webcam": settings.auto_webcam,
-                "quality": "hd" if settings.quality.startswith("1080") else "leve",
+                "quality": ("max" if settings.quality == QUALITY_MAX else
+                            "hd" if settings.quality.startswith("1080") else "leve"),
                 "groq_key_set": bool(k),
-                "groq_key_hint": f"{k[:4]}…{k[-4:]}" if len(k) > 12 else "", "saved_in": str(user_dir())}
+                "groq_key_hint": f"{k[:4]}…{k[-4:]}" if len(k) > 12 else "", "saved_in": str(user_dir()),
+                "twitch": {"set": twitchclips.has_credentials(), "id_hint": _hint("TWITCH_CLIENT_ID"),
+                           "signup": twitchclips.SIGNUP}}
 
     @app.get("/api/settings")
     def get_settings():
@@ -158,9 +164,10 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
     def put_settings(body: SettingsIn):
         changes = body.model_dump(exclude_none=True)
         keys = {env: changes.pop(f, None) for f, env in
-                (("groq_key", "GROQ_API_KEY"), ("cerebras_key", "CEREBRAS_API_KEY"), ("gemini_key", "GEMINI_API_KEY"))}
+                (("groq_key", "GROQ_API_KEY"), ("cerebras_key", "CEREBRAS_API_KEY"), ("gemini_key", "GEMINI_API_KEY"),
+                 ("twitch_client_id", "TWITCH_CLIENT_ID"), ("twitch_client_secret", "TWITCH_CLIENT_SECRET"))}
         if "quality" in changes:  # vale pras lives que começarem a gravar depois de salvar
-            changes["quality"] = QUALITY_HD if changes["quality"] == "hd" else QUALITY_LIGHT
+            changes["quality"] = {"max": QUALITY_MAX, "hd": QUALITY_HD}.get(changes["quality"], QUALITY_LIGHT)
         if "handle" in changes:
             h = changes["handle"].strip()
             changes["handle"] = h if not h or h.startswith("@") else "@" + h
@@ -174,6 +181,17 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
                 save_user_env(env, ",".join(k for k in re.split(r"[\s,;]+", val) if k))
         reset_ai_state()
         return settings_out()
+
+    @app.post("/api/settings/test-twitch")
+    def test_twitch():
+        h = twitchclips.helix()
+        if h is None:
+            raise HTTPException(400, "Cole o Client ID e o Client Secret da Twitch")
+        try:
+            uid = h.user_id("twitch")
+        except Exception as e:
+            raise HTTPException(502, f"A Twitch recusou as chaves: {e}")
+        return {"ok": bool(uid)}
 
     @app.post("/api/settings/test-groq")
     def test_groq():

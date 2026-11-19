@@ -6,8 +6,8 @@ from clipador.config import APP_DIR, Settings, load_config, save_webcam
 
 def test_load_config_has_12_streamers():
     settings, streamers = load_config(APP_DIR / "streamers.yaml")
-    assert len(streamers) == 15
-    assert settings.max_clip_s == 60
+    assert len(streamers) >= 35
+    assert settings.max_clip_s == 90 and settings.ideal_clip_s == 60
     names = {s.name for s in streamers}
     assert {"alanzoka", "xqc", "montanablack88", "dona", "yuri22", "loudcoringa"} <= names
     xqc = next(s for s in streamers if s.name == "xqc")
@@ -16,9 +16,12 @@ def test_load_config_has_12_streamers():
     assert "#cortesdelive" in settings.base_hashtags
 
 
-def test_rejects_clip_over_60s():
+def test_rejects_clip_over_90s():
+    assert Settings(max_clip_s=90).max_clip_s == 90   # Shorts/TikTok aceitam mais de 1 min
     with pytest.raises(ValueError):
-        Settings(max_clip_s=61)
+        Settings(max_clip_s=91)
+    with pytest.raises(ValueError):
+        Settings(ideal_clip_s=95)                     # ideal não passa do máximo
 
 
 def test_webcam_override(tmp_path):
@@ -40,3 +43,25 @@ def test_db_roundtrip(tmp_path):
     db.mark_posted(cid)
     assert db.list_clips(posted=False) == []
     assert db.get_clip(cid).posted is True
+
+
+def test_url_do_youtube_por_handle_e_por_id():
+    from clipador.config import Channel
+    assert Channel("youtube", "@Gameplayrj").url == "https://www.youtube.com/@Gameplayrj/live"
+    assert Channel("youtube", "piuzinho").url == "https://www.youtube.com/@piuzinho/live"
+    assert Channel("youtube", "UCJAbkIY17zAmCTNQHH0bQoQ").url == \
+        "https://www.youtube.com/channel/UCJAbkIY17zAmCTNQHH0bQoQ/live"
+
+
+def test_lista_padrao_tem_os_canais_certos():
+    from clipador.config import DEFAULTS_DIR
+    _, streamers = load_config(DEFAULTS_DIR / "streamers.yaml")
+    by = {s.name: {(c.platform, c.channel) for c in s.channels} for s in streamers}
+    assert len(by) == len(streamers)                                   # sem nome repetido
+    assert ("youtube", "UCJAbkIY17zAmCTNQHH0bQoQ") in by["davyjones"]  # Davy Jones faz live no GameplayRJ
+    assert ("twitch", "paulinholokobr") in by["paulinhooloko"]
+    assert ("twitch", "piuzinho") in by["piuzinho"]
+    assert ("kick", "coringa") in by["loudcoringa"]
+    assert ("twitch", "loud_coringa") not in by["loudcoringa"]          # esse canal não existe
+    assert "eveleone2004" not in by
+    assert len(streamers) >= 35

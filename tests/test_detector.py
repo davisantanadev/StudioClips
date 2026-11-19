@@ -71,3 +71,45 @@ def test_classify():
     assert classify("WTF???") == "shock" and classify("socorro que medo") == "shock"
     assert classify("valeu pelo sub") == "noise" and classify("!loco") == "noise"
     assert classify("boa noite") == "neutral"
+
+
+# ---------- "clipa isso": o chat pedindo clipe é sinal forte de momento ----------
+from clipador.detector import CLIP_SPEECH_RE, describe
+
+
+def test_classifica_pedido_de_clipe():
+    for t in ("CLIPA", "clipaaaa", "clip it", "CLIP THAT", "!clip", "corta isso", "isso vai pro corte", "CLIPPED"):
+        assert classify(t) == "clip", t
+    for t in ("eclipse", "boa noite", "obrigado pelo sub"):
+        assert classify(t) != "clip", t
+
+
+def test_chat_pedindo_clipe_dispara_mesmo_sem_risada():
+    det = HypeDetector(cooldown_s=120)
+    fires = _simulate(det, 0, 300, 5)
+    fires = _simulate(det, 300, 12, 18, "CLIPA ISSO", fires)
+    assert len(fires) == 1
+    assert det.last_signals["kind"] == "pedido de clipe"
+    assert "pedindo clipe" in describe(det.last_signals)
+
+
+def test_poucos_pedidos_num_chat_gigante_nao_contam():
+    det = HypeDetector(cooldown_s=120)
+    fires = _simulate(det, 0, 300, 60)
+    for s in range(300, 312):  # 1 "clip" perdido no meio de 60 msg/s normais
+        det.feed_chat(s + 0.5, "clip")
+    fires = _simulate(det, 300, 12, 60, "boa", fires)
+    assert fires == []
+
+
+def test_streamer_pedindo_clipe_na_fala():
+    for t in ("clipa isso aí", "Clip that!", "corta isso pelo amor", "isso vai pro corte", "alguém clipa"):
+        assert CLIP_SPEECH_RE.search(t), t
+    for t in ("vou pegar o carro", "o eclipse lunar"):
+        assert not CLIP_SPEECH_RE.search(t), t
+
+def test_disparo_externo_respeita_o_intervalo():
+    det = HypeDetector(cooldown_s=120)
+    assert det.external_fire(1000.0) is True
+    assert det.external_fire(1050.0) is False   # dentro do intervalo
+    assert det.external_fire(1121.0) is True

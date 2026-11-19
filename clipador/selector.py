@@ -1,4 +1,4 @@
-"""A IA (Groq) escolhe o melhor trecho de 40–60 s dentro da janela de análise e já escreve card e título."""
+"""A IA (Groq) escolhe o melhor trecho (~1 min, até 90 s quando a história pede) dentro da janela de análise e já escreve card e título."""
 from __future__ import annotations
 
 import logging
@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from . import ai
 from .ai import Seg, Transcript, Word
+from .detector import CLIP_SPEECH_RE
 
 log = logging.getLogger(__name__)
 
@@ -84,6 +85,12 @@ def slice_transcript(t: Transcript, start: float, end: float) -> Transcript:
     return Transcript(t.lang, segs)
 
 
+def fala_text(t: Transcript) -> str:
+    """Fala com tempo; marca [CLIPA] onde o streamer pede clipe ("clipa isso", "clip that", "corta isso")."""
+    return "\n".join(f"[{s.start:.1f}-{s.end:.1f}] " + ("[CLIPA] " if CLIP_SPEECH_RE.search(s.text) else "") + s.text
+                     for s in t.segments) or "(sem fala, só gritos/música)"
+
+
 def _chat_timeline(chat: list[tuple[float, str]], bucket: float = 5.0, samples: int = 4) -> str:
     groups: dict[int, list[str]] = defaultdict(list)
     for t, text in chat:
@@ -134,12 +141,13 @@ def _pick(j: dict) -> dict | None:
 
 def select_moment(t: Transcript, chat: list[tuple[float, str]], peak: float, total: float, *,
                   display: str, live_title: str, min_s: float, max_s: float, model: str,
-                  signals: str = "") -> Selection:
+                  signals: str = "", ideal_s: float | None = None) -> Selection:
     """`peak`, tempos do chat e da transcrição: segundos dentro da janela de análise.
     `signals`: o que o detector viu (risada no chat, susto, grito no áudio)."""
-    fala = "\n".join(f"[{s.start:.1f}-{s.end:.1f}] {s.text}" for s in t.segments) or "(sem fala, só gritos/música)"
+    fala = fala_text(t)
     fala = fala[-7000:]  # economiza cota grátis da IA
-    ideal_min = max(min_s, max_s - 8)
+    ideal = min(ideal_s or max_s, max_s)
+    ideal_min = max(min_s, ideal - 8)
     user = (
         f"Streamer: {display} jogando GTA 6. Título da live: {live_title or '-'}\n"
         f"Janela de {total:.0f}s da live. O pico foi perto de {peak:.0f}s"
@@ -148,10 +156,14 @@ def select_moment(t: Transcript, chat: list[tuple[float, str]], peak: float, tot
         f"FALA (segundos):\n{fala}\n\nCHAT (a cada 5s: quantidade e exemplos):\n{_chat_timeline(chat) or '-'}\n\n"
         + VIRAL_RULES +
         "\nTAREFA: proponha até 3 cortes diferentes desta janela e dê nota sincera a cada um.\n"
-        f"- Duração: o ideal é perto de 1 minuto ({ideal_min:.0f} a {max_s:.0f} s): contexto curto antes e a "
-        f"reação inteira depois. Só faça mais curto (mínimo {min_s:.0f} s) se o resto for enrolação.\n"
+        f"- Duração: o ideal é perto de {ideal:.0f} s ({ideal_min:.0f} a {ideal:.0f} s): contexto curto antes e a "
+        f"reação inteira depois. Só faça mais curto (mínimo {min_s:.0f} s) se o resto for enrolação"
+        + (f"; só passe de {ideal:.0f} s (até {max_s:.0f} s, nunca mais) se a história PRECISAR: contexto "
+           "longo pra entender ou reação que continua forte" if max_s > ideal else "") + ".\n"
         "- Comece no início de uma frase (nunca no meio de uma fala) e termine logo depois da reação.\n"
         "- O corte tem que incluir o pico (o acontecimento).\n"
+        "- [CLIPA] na fala = o próprio streamer pediu clipe ali: sinal forte de que algo bom acabou de acontecer; "
+        "inclua o que aconteceu logo ANTES do pedido (o pedido em si pode ficar no fim ou sair).\n"
         "NOTA (seja MUITO duro; a maioria dos momentos de live é 4-6 e não deve ser postada):\n"
         "  9-10: viraliza com certeza: muito engraçado, susto real ou ação absurda, qualquer um entende;\n"
         "  7-8: acontecimento forte e claro com reação forte do streamer;\n"

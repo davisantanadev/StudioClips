@@ -8,7 +8,7 @@ def test_empty_streamers_yaml_falls_back_to_defaults_and_is_restored(tmp_path):
     cfg = tmp_path / "streamers.yaml"
     cfg.write_text("", encoding="utf-8")  # o que o install.bat criava quando o arquivo faltava
     settings, streamers = load_config(cfg)
-    assert len(streamers) == 15
+    assert len(streamers) >= 35 and {s.name for s in streamers} >= {"alanzoka", "piuzinho", "paulinhooloko"}
     assert "#cortesdelive" in settings.base_hashtags
     assert "alanzoka" in cfg.read_text(encoding="utf-8")  # arquivo recriado para o usuário editar
 

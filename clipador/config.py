@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -30,6 +31,8 @@ class Channel:
             return f"https://www.twitch.tv/{self.channel}"
         if self.platform == "kick":
             return f"https://kick.com/{self.channel}"
+        if re.fullmatch(r"UC[\w-]{22}", self.channel):  # canal sem @: pelo ID
+            return f"https://www.youtube.com/channel/{self.channel}/live"
         handle = self.channel if self.channel.startswith("@") else f"@{self.channel}"
         return f"https://www.youtube.com/{handle}/live"
 
@@ -49,6 +52,7 @@ class Streamer:
 
 
 QUALITY_HD = "1080p60,1080p,936p60,900p60,720p60,720p,best"   # ~6-8 Mbps por live
+QUALITY_MAX = "best"                                           # a maior que a live tiver (YouTube: até 1440p/4K)
 QUALITY_LIGHT = "720p60,720p,480p,best"                        # ~3-4 Mbps por live (webcam mais borrada)
 
 
@@ -56,7 +60,8 @@ QUALITY_LIGHT = "720p60,720p,480p,best"                        # ~3-4 Mbps por l
 class Settings:
     pre_s: float = 43
     post_s: float = 15
-    max_clip_s: float = 60
+    max_clip_s: float = 90          # Shorts/TikTok aceitam mais de 1 min: a IA só passa de ideal_clip_s se a história pedir
+    ideal_clip_s: float = 60        # duração que a IA mira
     min_clip_s: float = 45
     analysis_before_s: float = 90   # quanto a IA olha antes do pico
     analysis_after_s: float = 25    # e depois
@@ -80,11 +85,12 @@ class Settings:
     port: int = 8765
     base_hashtags: list[str] = field(default_factory=list)
     data_dir: Path = APP_DIR / "data"
-    kick_pusher_key: str = "32cbd69e4b950bf97679"
 
     def __post_init__(self) -> None:
-        if self.max_clip_s > 60:
-            raise ValueError("max_clip_s não pode passar de 60 segundos")
+        if self.max_clip_s > 90:
+            raise ValueError("max_clip_s não pode passar de 90 segundos")
+        if self.ideal_clip_s > self.max_clip_s:
+            raise ValueError("ideal_clip_s não pode ser maior que max_clip_s")
         if self.min_clip_s > self.max_clip_s:
             raise ValueError("min_clip_s não pode ser maior que max_clip_s")
         if self.pre_s + self.post_s <= 0:

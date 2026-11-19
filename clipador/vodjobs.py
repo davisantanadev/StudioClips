@@ -17,7 +17,8 @@ from typing import Callable
 
 from .config import Settings, Streamer
 from .pipeline import new_workdir, process_candidate
-from .vod import (Moment, Stopped, audio_scores, chat_replay, chat_scores, download_section, pick_moments,
+from .twitchclips import ClipHit, hits_near, vod_boost
+from .vod import (BUCKET, Moment, Stopped, audio_scores, chat_replay, chat_scores, download_section, pick_moments,
                   platform_of, vod_info)
 
 log = logging.getLogger(__name__)
@@ -240,12 +241,16 @@ class VodManager:
                     raise _Stop()
                 self._update(tid, stage="ouvindo o áudio da VOD", progress=0.37)
             self._check(tid)
+            # clipes que os espectadores fizeram na Twitch (se tiver as chaves da Twitch): mais peso nesses trechos
+            scores, hits = vod_boost(url, scores, BUCKET, note=lambda msg: self._log(tid, msg))
             found = sorted(pick_moments(scores, t["top_n"] * 2), key=lambda m: -m.score)  # dobro: IA descarta fracos
-            self._update(tid, moments=[[m.t, m.score] for m in found], progress=0.4)
+            self._update(tid, moments=[[m.t, m.score] for m in found], progress=0.4,
+                         twitch_hits=[[h.t, h.views] for h in hits])
             self._log(tid, f"{len(found)} momentos candidatos achados" if found else "nenhum pico forte nessa VOD")
             t = self.get(tid)
 
         moments = [Moment(a, b) for a, b in t["moments"]]
+        hits = [ClipHit(a, b) for a, b in t.get("twitch_hits") or []]
         before, after = self.settings.analysis_before_s, self.settings.analysis_after_s
         for k in range(t["next_index"], len(moments)):
             t = self.get(tid)
@@ -264,9 +269,11 @@ class VodManager:
                 wd = new_workdir(self.settings, s)
                 raw = download_section(url, start, end, wd / "analysis.mp4")
                 chat = [(x - start, txt) for (x, txt) in msgs if start <= x <= end]
+                n_clips, views = hits_near(hits, m.t)
                 clip = process_candidate(s, raw, m.t - start, self.settings, platform=platform_of(url),
                                          live_title=t["title"], chat=chat, workdir=wd,
-                                         note=lambda msg: self._log(tid, msg))
+                                         note=lambda msg: self._log(tid, msg),
+                                         signals={"twitch_clips": n_clips, "twitch_views": views} if n_clips else None)
             except _Stop:
                 raise
             except Exception as e:

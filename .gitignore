@@ -26,3 +26,6 @@ packaging/ffmpeg/
 .idea/
 Thumbs.db
 desktop.ini
+
+# config local do Claude Code (preview)
+.claude/

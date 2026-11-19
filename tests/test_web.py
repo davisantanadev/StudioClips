@@ -75,3 +75,31 @@ def test_settings_saved_outside_app_and_applied(tmp_path):
     assert load_user_settings()["handle"] == "@davi"
     assert "gsk_abcdef123456" in (user_dir() / ".env").read_text(encoding="utf-8")
     assert c.put("/api/settings", json={"min_score": 99}).status_code == 422
+
+
+def test_chaves_da_twitch_no_painel(tmp_path, monkeypatch):
+    import os
+    from clipador.config import user_dir
+    monkeypatch.delenv("TWITCH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("TWITCH_CLIENT_SECRET", raising=False)
+    _, c = _client(tmp_path)
+    assert c.get("/api/settings").json()["twitch"]["set"] is False
+    r = c.put("/api/settings", json={"twitch_client_id": "abcd1234efgh5678", "twitch_client_secret": "s3cr3tvalue99"}).json()
+    assert r["twitch"]["set"] is True
+    assert "s3cr3tvalue99" not in str(r)                 # o segredo nunca volta pro painel
+    env = (user_dir() / ".env").read_text(encoding="utf-8")
+    assert "TWITCH_CLIENT_ID=abcd1234efgh5678" in env and "TWITCH_CLIENT_SECRET=s3cr3tvalue99" in env
+    assert os.environ["TWITCH_CLIENT_SECRET"] == "s3cr3tvalue99"
+
+
+def test_testar_twitch_sem_chave(tmp_path, monkeypatch):
+    monkeypatch.delenv("TWITCH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("TWITCH_CLIENT_SECRET", raising=False)
+    _, c = _client(tmp_path)
+    assert c.post("/api/settings/test-twitch").status_code == 400
+
+def test_qualidade_maxima(tmp_path):
+    s, c = _client(tmp_path)
+    r = c.put("/api/settings", json={"quality": "max"}).json()
+    assert r["quality"] == "max" and s.quality == "best"
+    assert c.put("/api/settings", json={"quality": "hd"}).json()["quality"] == "hd"

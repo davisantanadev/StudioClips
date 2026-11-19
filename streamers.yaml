@@ -1,23 +1,28 @@
 # Clipador GTA 6 — lista de streamers e ajustes.
 # O @, a chave do Groq e a nota mínima ficam salvos pelo painel (Ferramentas → Configurações),
 # fora desta pasta: atualizar o Clipador não apaga nada.
-# Cada streamer pode ter vários canais; o sistema grava o que estiver ao vivo.
+# Cada streamer pode ter vários canais (Twitch, Kick, YouTube); o sistema grava o primeiro que estiver
+# ao vivo, então ponha primeiro a plataforma principal dele. No YouTube vale @handle ou o ID do canal (UC…).
+# Canais conferidos nas plataformas em 19/11/2026. Quem não estiver jogando GTA não é gravado (require_gta).
 
 settings:
   pre_s: 43            # segundos antes do pico (sem IA)
   post_s: 15           # segundos depois do pico (sem IA)
   min_clip_s: 45       # duração mínima do corte
-  max_clip_s: 60       # duração máxima (teto: 60)
+  ideal_clip_s: 60     # duração que a IA mira
+  max_clip_s: 90       # máximo quando a história pede (teto: 90)
   min_score: 7         # nota mínima da IA (0-10) pra virar clipe
   hype_threshold: 3.0
   cooldown_s: 120
   max_per_hour: 6
-  max_live: 12
+  max_live: 12         # quantas lives gravar ao mesmo tempo (cada uma usa ~6-8 Mbps de internet em 1080p)
   require_gta: true
   handle: "@seuperfil"
   accent: "#FF2E63"
   card_seconds: 4
-  quality: "1080p60,1080p,936p60,900p60,720p60,720p,best"   # HD: webcam nítida (menos internet: 720p60,720p,480p,best)
+  # 1080p60 é o máximo da Twitch e da Kick. "best" pega a maior de cada live (YouTube até 1440p/4K, bem mais
+  # internet). Também dá pra trocar no painel: Ferramentas → Configurações → Qualidade da gravação.
+  quality: "1080p60,1080p,936p60,900p60,720p60,720p,best"
 
 streamers:
   # ---------- BR ----------
@@ -26,21 +31,89 @@ streamers:
     lang: pt
     channels:
       - {platform: twitch, channel: alanzoka}
+      - {platform: youtube, channel: "@alanzoka"}
   - name: davyjones
     display: Davy Jones
     lang: pt
     channels:
+      - {platform: youtube, channel: UCJAbkIY17zAmCTNQHH0bQoQ}   # GameplayRJ: onde ele faz as lives de GTA 6
       - {platform: twitch, channel: davyjones}
-  - name: bistecone
-    display: Bistecone
+      - {platform: kick, channel: davyjones}
+  - name: paulinhooloko
+    display: Paulinho o LOKO
     lang: pt
     channels:
-      - {platform: twitch, channel: bistecone}
+      - {platform: youtube, channel: UCdlJx-w37viXFNq__qZ7ARQ}   # @PaulinhoLOKOoficial
+      - {platform: twitch, channel: paulinholokobr}
+      - {platform: kick, channel: paulinholokobr}
+  - name: piuzinho
+    display: Piuzinho
+    lang: pt
+    channels:
+      - {platform: twitch, channel: piuzinho}
+      - {platform: youtube, channel: "@piuzinho"}
+      - {platform: kick, channel: piuzinho}
   - name: cellbit
     display: Cellbit
     lang: pt
     channels:
       - {platform: twitch, channel: cellbit}
+  - name: loudcoringa
+    display: LOUD Coringa
+    lang: pt
+    channels:
+      - {platform: youtube, channel: "@LOUDCoringa"}
+      - {platform: kick, channel: coringa}
+  - name: gaules
+    display: Gaules
+    lang: pt
+    channels:
+      - {platform: twitch, channel: gaules}
+  - name: casimiro
+    display: Casimiro
+    lang: pt
+    channels:
+      - {platform: twitch, channel: casimito}
+  - name: jukes
+    display: Jukes
+    lang: pt
+    channels:
+      - {platform: twitch, channel: jukes}
+  - name: felps
+    display: Felps
+    lang: pt
+    channels:
+      - {platform: twitch, channel: felps}
+  - name: tck10
+    display: TcK10
+    lang: pt
+    channels:
+      - {platform: twitch, channel: tck10}
+  - name: liminha
+    display: Liminha
+    lang: pt
+    channels:
+      - {platform: twitch, channel: liminhag0d}
+  - name: gordox
+    display: Gordox
+    lang: pt
+    channels:
+      - {platform: twitch, channel: gordox}
+  - name: baiano
+    display: Baiano
+    lang: pt
+    channels:
+      - {platform: twitch, channel: baiano}
+  - name: brksedu
+    display: BRKsEDU
+    lang: pt
+    channels:
+      - {platform: youtube, channel: "@BRKsEDU"}
+  - name: gabepeixe
+    display: Gabepeixe
+    lang: pt
+    channels:
+      - {platform: kick, channel: gabepeixe}
   - name: blackoutz
     display: Blackoutz
     lang: pt
@@ -57,36 +130,104 @@ streamers:
     display: Yuri22
     lang: pt
     channels:
-      - {platform: twitch, channel: yuri22}
       - {platform: kick, channel: yuri22}
-  - name: loudcoringa
-    display: LOUD Coringa
+  - name: bistecone
+    display: Bistecone
     lang: pt
     channels:
-      - {platform: twitch, channel: loud_coringa}
+      - {platform: twitch, channel: bistecone}
 
   # ---------- gringos (legenda traduzida pra PT-BR) ----------
-  - name: djmariio
-    display: DjMaRiiO
-    lang: es
-    channels:
-      - {platform: twitch, channel: djmariio}
   - name: xqc
     display: xQc
     lang: en
     channels:
       - {platform: kick, channel: xqc}
       - {platform: twitch, channel: xqc}
+  - name: kaicenat
+    display: Kai Cenat
+    lang: en
+    channels:
+      - {platform: twitch, channel: kaicenat}
+  - name: ishowspeed
+    display: IShowSpeed
+    lang: en
+    channels:
+      - {platform: youtube, channel: UCWsDFcIhY2DBi3GB5uykGXA}
+      - {platform: twitch, channel: ishowspeed}
+  - name: caseoh
+    display: CaseOh
+    lang: en
+    channels:
+      - {platform: twitch, channel: caseoh_}
+  - name: theburntpeanut
+    display: TheBurntPeanut
+    lang: en
+    channels:
+      - {platform: twitch, channel: theburntpeanut}
+      - {platform: kick, channel: theburntpeanut}
+  - name: summit1g
+    display: summit1g
+    lang: en
+    channels:
+      - {platform: twitch, channel: summit1g}
   - name: typicalgamer
     display: TypicalGamer
     lang: en
     channels:
       - {platform: youtube, channel: "@TypicalGamer"}
-  - name: buster
-    display: Buster
-    lang: ru
+  - name: adinross
+    display: Adin Ross
+    lang: en
     channels:
-      - {platform: twitch, channel: buster}
+      - {platform: kick, channel: adinross}
+  - name: n3on
+    display: N3on
+    lang: en
+    channels:
+      - {platform: kick, channel: n3on}
+  - name: illojuan
+    display: IlloJuan
+    lang: es
+    channels:
+      - {platform: twitch, channel: illojuan}
+  - name: rubius
+    display: Rubius
+    lang: es
+    channels:
+      - {platform: twitch, channel: rubius}
+  - name: auronplay
+    display: AuronPlay
+    lang: es
+    channels:
+      - {platform: twitch, channel: auronplay}
+  - name: ibai
+    display: Ibai
+    lang: es
+    channels:
+      - {platform: twitch, channel: ibai}
+  - name: thegrefg
+    display: TheGrefg
+    lang: es
+    channels:
+      - {platform: twitch, channel: thegrefg}
+  - name: djmariio
+    display: DjMaRiiO
+    lang: es
+    channels:
+      - {platform: youtube, channel: UCi7TVXyvrIwqeS9tfYD8UDA}
+      - {platform: twitch, channel: djmariio}
+  - name: spreen
+    display: Spreen
+    lang: es
+    channels:
+      - {platform: kick, channel: spreen}
+      - {platform: twitch, channel: elspreen}
+  - name: westcol
+    display: Westcol
+    lang: es
+    channels:
+      - {platform: kick, channel: westcol}
   - name: trymacs
     display: Trymacs
     lang: de
@@ -97,9 +238,13 @@ streamers:
     lang: de
     channels:
       - {platform: twitch, channel: montanablack88}
-  - name: eveleone2004
-    display: eveleone2004
-    lang: en
-    enabled: false   # canal ainda não confirmado
+  - name: buster
+    display: Buster
+    lang: ru
     channels:
-      - {platform: twitch, channel: eveleone2004}
+      - {platform: twitch, channel: buster}
+  - name: windah
+    display: Windah Basudara
+    lang: id
+    channels:
+      - {platform: youtube, channel: UCoIiiHof6BJ85PLuLkuxuhw}

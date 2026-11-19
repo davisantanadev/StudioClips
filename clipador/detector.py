@@ -16,22 +16,34 @@ LAUGH_RE = re.compile(
     r"[хx]а[хx]а|ахах|😂|🤣|💀|kek)", re.I)
 SHOCK_RE = re.compile(
     r"(WTF|OMG|\?{3,}|monka[SW]|\bD:|NO{3,}|N[ÃA]O{3,}|socorro|medo|susto|assust|jumpscare|"
-    r"caralho|que isso|mds\b|meu deus|pog(gers|u)?|siu+|\bgg\b|clip\s*it|holy|insane|bruh|"
+    r"caralho|que isso|mds\b|meu deus|pog(gers|u)?|siu+|\bgg\b|holy|insane|bruh|"
     r"😱|😨|😮|🤯|😳)", re.I)
 NOISE_RE = re.compile(
     r"^\s*!|\bsubs?\b|subscri|inscri|presente|gift|\bbits?\b|raid|obrigad[oa] pel[oa]|valeu pel[oa]|"
     r"follow|seguindo|prime", re.I)
-HYPE_RE = re.compile(f"{LAUGH_RE.pattern}|{SHOCK_RE.pattern}", re.I)  # VOD
+# chat pedindo clipe ("CLIPA", "clip it", "!clip", "corta isso"): quem assiste viu algo que vale corte
+CLIP_RE = re.compile(
+    r"(^\s*!clip\b|\bclip+(a+|em|ar|ped|pem)?\b|\bclip\s*(it|that|this|isso|essa)\b|"
+    r"\bcorta\s+(isso|essa|esse|a[ií])\b|\bvai\s+pro\s+(corte|clip)\b)", re.I)
+# o streamer falando pra clipar (na transcrição que a IA lê)
+CLIP_SPEECH_RE = re.compile(
+    r"(\bclip(a|em|ar)\b|\bclip\s*(it|that|this)\b|\bcorta\s+(isso|essa|esse|a[ií])\b|\bvai\s+pro\s+corte\b)",
+    re.I)
+HYPE_RE = re.compile(f"{LAUGH_RE.pattern}|{SHOCK_RE.pattern}|{CLIP_RE.pattern}", re.I)  # VOD
 BUCKET_S = 2.0
 SCREAM_Z = 2.5          # volume da fala/jogo bem acima do normal do canal
 LAUGH_SHARE = 0.20      # parte do chat rindo pra contar como "momento engraçado"
 SHOCK_SHARE = 0.15
+CLIP_MIN = 3           # pedidos de clipe em ~6 s pra contar
+CLIP_SHARE = 0.03      # e pelo menos 3% do chat (num chat gigante, 3 'clip' perdidos não é nada)
 
 
 def classify(text: str) -> str:
-    """'laugh', 'shock', 'noise' (sub/bot/presente: não conta) ou 'neutral'."""
+    """'clip' (pedido de clipe), 'laugh', 'shock', 'noise' (sub/bot/presente: não conta) ou 'neutral'."""
     if not text:
         return "neutral"
+    if CLIP_RE.search(text):  # antes do ruído: "!clip" é comando, mas é pedido de clipe
+        return "clip"
     if NOISE_RE.search(text):
         return "noise"
     if LAUGH_RE.search(text):
@@ -81,11 +93,11 @@ class HypeDetector:
         self.min_rate = min_rate
         self._chat = _Ewma(alpha)
         self._audio = _Ewma(0.02, min_sd=3.0)  # dB
-        self._buckets: dict[int, list[int]] = {}  # idx -> [n, risada, susto]
+        self._buckets: dict[int, list[int]] = {}  # idx -> [n, risada, susto, pedido de clipe]
         self._audio_z: deque[tuple[float, float]] = deque(maxlen=240)  # (ts, z) por segundo
         self._recent: deque[tuple[float, float, dict]] = deque(maxlen=16)  # (ts, score, sinais)
         self._closed_upto: int | None = None
-        self._win: deque[tuple[int, int, int]] = deque(maxlen=3)  # últimos 3 baldes (6 s)
+        self._win: deque[tuple[int, ...]] = deque(maxlen=3)  # últimos 3 baldes (6 s)
         self._last_fire = -1e18
         self.last_signals: dict = {}
         self._lock = threading.Lock()
@@ -99,10 +111,11 @@ class HypeDetector:
         with self._lock:
             if self._closed_upto is not None and idx <= self._closed_upto:
                 idx = self._closed_upto + 1
-            b = self._buckets.setdefault(idx, [0, 0, 0])
+            b = self._buckets.setdefault(idx, [0, 0, 0, 0])
             b[0] += 1
             b[1] += kind == "laugh"
             b[2] += kind == "shock"
+            b[3] += kind == "clip"
 
     def feed_audio(self, ts: float, db: float) -> None:
         """Volume (dB) do segundo que terminou em `ts`."""
@@ -123,8 +136,10 @@ class HypeDetector:
         if self._closed_upto is None:
             self._closed_upto = (min(self._buckets) - 1) if self._buckets else cur - 1
         for idx in range(self._closed_upto + 1, cur):
-            self._win.append(tuple(self._buckets.pop(idx, [0, 0, 0])))
+            self._win.append(tuple(self._buckets.pop(idx, [0, 0, 0, 0])))
             n = sum(w[0] for w in self._win)
+            clips = sum(w[3] for w in self._win)
+            clip_req = clips >= CLIP_MIN and clips >= CLIP_SHARE * n
             laugh = sum(w[1] for w in self._win) / n if n else 0.0
             shock = sum(w[2] for w in self._win) / n if n else 0.0
             rate = n / (BUCKET_S * len(self._win))  # taxa sustentada em ~6 s
@@ -139,14 +154,18 @@ class HypeDetector:
                 score += 1.0
             if scream >= SCREAM_Z:
                 score += 0.6 * scream
-            # só vira momento se houver REAÇÃO: risada, susto/choque ou grito
-            emotional = (n >= 4 and (laugh >= LAUGH_SHARE or shock >= SHOCK_SHARE)) or scream >= SCREAM_Z
+            if clip_req:
+                score += 2.0
+            # só vira momento se houver REAÇÃO: risada, susto/choque, grito ou o chat pedindo clipe
+            emotional = ((n >= 4 and (laugh >= LAUGH_SHARE or shock >= SHOCK_SHARE)) or scream >= SCREAM_Z
+                         or clip_req)
             if rate < self.min_rate or not emotional:
                 score = min(score, self.z_threshold - 0.01)
-            kind = ("risada" if laugh >= LAUGH_SHARE and laugh >= shock else
+            kind = ("pedido de clipe" if clip_req else
+                    "risada" if laugh >= LAUGH_SHARE and laugh >= shock else
                     "susto/choque" if shock >= SHOCK_SHARE else "grito" if scream >= SCREAM_Z else "")
             signals = {"kind": kind, "laugh": round(laugh, 2), "shock": round(shock, 2),
-                       "scream": round(scream, 1), "chat_z": round(z, 1), "rate": round(rate, 1)}
+                       "scream": round(scream, 1), "chat_z": round(z, 1), "rate": round(rate, 1), "clips": clips}
             self._recent.append((t, score, signals))
         self._closed_upto = max(self._closed_upto, cur - 1)
 
@@ -167,6 +186,14 @@ class HypeDetector:
             # o momento real costuma ser ~3 s antes do chat explodir
             return peak_ts - 3.0
 
+    def external_fire(self, now: float | None = None) -> bool:
+        """Outro sinal (ex.: clipes da Twitch) quer disparar: só deixa se passou o intervalo mínimo."""
+        now = time.time() if now is None else now
+        with self._lock:
+            if now - self._last_fire < self.cooldown_s:
+                return False
+            self._last_fire = now
+            return True
     def force(self, now: float | None = None) -> float:
         """Disparo manual (botão no painel)."""
         now = time.time() if now is None else now
@@ -183,6 +210,11 @@ def describe(signals: dict | None) -> str:
     if signals.get("kind") == "manual":
         return "corte pedido à mão (sem sinal automático)"
     parts = []
+    if signals.get("twitch_clips"):
+        parts.append(f"espectadores fizeram {signals['twitch_clips']} clipes na Twitch desse trecho "
+                     f"({signals.get('twitch_views', 0)} views) — o momento está aí")
+    if signals.get("kind") == "pedido de clipe" or signals.get("clips", 0) >= CLIP_MIN:
+        parts.append(f"chat pedindo clipe ({signals.get('clips', 0)} msgs tipo CLIPA/clip it)")
     if signals.get("laugh", 0) >= LAUGH_SHARE:
         parts.append(f"chat {round(100 * signals['laugh'])}% risada (KKKK/KEKW)")
     if signals.get("shock", 0) >= SHOCK_SHARE:
