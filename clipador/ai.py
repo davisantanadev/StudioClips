@@ -65,7 +65,8 @@ def groq_key() -> str | None:
 
 def extract_audio(video: Path, out: Path) -> Path:
     subprocess.run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(video), "-vn", "-ac", "1",
-                    "-ar", "16000", "-b:a", "48k", str(out)], check=True, creationflags=NO_WINDOW)
+                    "-ar", "16000", "-b:a", "48k", str(out)], check=True, creationflags=NO_WINDOW,
+                   timeout=300)
     return out
 
 

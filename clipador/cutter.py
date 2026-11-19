@@ -41,14 +41,14 @@ def cut_clip(segments: list[Segment], peak_ts: float, pre_s: float, post_s: floa
     joined = out.with_name(out.stem + "_join.ts")
     subprocess.run([ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
                     "-i", str(lst), "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", str(joined)],
-                   check=True, creationflags=NO_WINDOW)
+                   check=True, creationflags=NO_WINDOW, timeout=300)
     # 2) corte exato com recodificação rápida (sem frames quebrados no início)
     from .render import video_encoder
     enc = video_encoder(fast=True)
     subprocess.run([ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error",
                     "-ss", f"{max(offset, 0):.3f}", "-i", str(joined), "-t", f"{dur:.3f}",
                     "-map", "0:v:0", "-map", "0:a:0?", *enc, "-c:a", "aac", "-b:a", "192k",
-                    "-movflags", "+faststart", str(out)], check=True, creationflags=NO_WINDOW)
+                    "-movflags", "+faststart", str(out)], check=True, creationflags=NO_WINDOW, timeout=600)
     joined.unlink(missing_ok=True)
     lst.unlink(missing_ok=True)
     return out, dur, max(0.0, peak_ts - start)

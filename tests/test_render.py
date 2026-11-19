@@ -42,3 +42,15 @@ def test_render_without_webcam_and_without_audio(tmp_path):
     out = render_vertical(src, tmp_path / "w" / "final.mp4", None, ["xQc no GTA 6"], None, "", "#22D3EE")
     assert _size(out) == (1080, 1920)
     assert not has_audio(out)
+
+
+def test_capa_com_tempo_depois_do_fim_nao_trava(tmp_path):
+    """A IA às vezes escolhe um trecho que termina antes do pico: o tempo da capa caía depois do fim do vídeo e o
+    ffmpeg ficava rodando pra sempre (travou a fila inteira em 19/11/2026)."""
+    import time as _t
+    (tmp_path / "w").mkdir()
+    src = make_video(tmp_path / "w" / "source.mp4", 5)
+    t0 = _t.time()
+    cover = make_cover(src, 90, tmp_path / "w" / "capa.jpg", (900, 450, 360, 250), ["Card"], "@clipes")
+    assert cover.exists() and cover.stat().st_size > 1000
+    assert _t.time() - t0 < 60

@@ -38,7 +38,7 @@ def trim(src: Path, start: float, dur: float, out: Path) -> Path:
     subprocess.run([ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{start:.3f}",
                     "-i", str(src), "-t", f"{dur:.3f}", "-map", "0:v:0", "-map", "0:a:0?",
                     *video_encoder(fast=True), "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
-                    str(out)], check=True, creationflags=NO_WINDOW)
+                    str(out)], check=True, creationflags=NO_WINDOW, timeout=600)
     return out
 
 
@@ -64,8 +64,14 @@ def _render(workdir: Path, meta: dict, card: list[str], settings: Settings) -> t
     final = render_vertical(workdir / "source.mp4", workdir / "final.mp4", webcam, card,
                             ass if ass.exists() else None, settings.handle, settings.accent,
                             card_s=settings.card_seconds or None, framing=framing, zoom=zoom)
-    cover = make_cover(workdir / "source.mp4", meta.get("peak_offset", 1.0), workdir / "capa.jpg",
-                       webcam, card, settings.handle, settings.accent, framing=framing, zoom=zoom)
+    cover = workdir / "capa.jpg"
+    try:
+        make_cover(workdir / "source.mp4", meta.get("peak_offset", 1.0), cover,
+                   webcam, card, settings.handle, settings.accent, framing=framing, zoom=zoom)
+    except Exception as e:  # capa nunca derruba o clipe: usa um quadro do vídeo pronto
+        log.warning("capa no layout falhou (%s) — usando um quadro do vídeo", e)
+        from .recover import ensure_cover
+        ensure_cover(workdir)
     return final, cover
 
 
@@ -182,7 +188,9 @@ def process_candidate(streamer: Streamer, analysis: Path, peak_offset: float, se
     preset = PostTexts(sel.card, sel.title, sel.description, sel.hashtags) if sel.by_ai else None
     if sel.by_ai:
         note(f"🧠 {streamer.display}: nota {sel.score:.0f} — {sel.reason}")
-    return _finish(streamer, workdir, tr, max(0.5, peak_offset - sel.start), settings, platform=platform,
+    # o pico pode ficar fora do trecho que a IA escolheu: a capa usa um instante que existe no clipe
+    cover_at = min(max(0.5, peak_offset - sel.start), max(0.5, sel.dur - 0.5))
+    return _finish(streamer, workdir, tr, cover_at, settings, platform=platform,
                    live_title=live_title, chat_snippets=snippets, preset=preset, t0=t0)
 
 

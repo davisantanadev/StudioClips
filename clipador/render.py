@@ -23,6 +23,8 @@ FONTS = RES_DIR / "assets" / "fonts"
 CARD_FONT = FONTS / "ArchivoBlack-Regular.ttf"
 W, H = 1080, 1920
 CARD_H = 260
+RENDER_TIMEOUT_S = 900   # montar um clipe de até 90 s leva ~1-2 min; 15 min = travou
+COVER_TIMEOUT_S = 120
 # proporção (largura/altura) do pedaço do jogo; None = preenche todo o espaço que sobra
 ZOOMS: dict[str, float | None] = {"aberto": 1.25, "medio": 1.0, "fechado": None}
 DEFAULT_ZOOM = "aberto"
@@ -83,9 +85,12 @@ def _hex(c: str) -> str:
 
 @functools.lru_cache(maxsize=1)
 def _has_nvenc() -> bool:
-    test = subprocess.run([ffmpeg_bin(), "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
-                           "color=black:s=256x256:d=0.2", "-c:v", "h264_nvenc", "-f", "null", "-"],
-                          capture_output=True, creationflags=NO_WINDOW)
+    try:
+        test = subprocess.run([ffmpeg_bin(), "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                               "color=black:s=256x256:d=0.2", "-c:v", "h264_nvenc", "-f", "null", "-"],
+                              capture_output=True, creationflags=NO_WINDOW, timeout=60)
+    except subprocess.TimeoutExpired:
+        return False
     return test.returncode == 0
 
 
@@ -99,18 +104,21 @@ def video_encoder(fast: bool = False) -> list[str]:
 
 
 def has_audio(path: Path) -> bool:
-    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
-                        "stream=index", "-of", "csv=p=0", str(path)], capture_output=True, text=True,
-                       creationflags=NO_WINDOW)
+    try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+                            "stream=index", "-of", "csv=p=0", str(path)], capture_output=True, text=True,
+                           creationflags=NO_WINDOW, timeout=60)
+    except subprocess.TimeoutExpired:
+        return False
     return bool(r.stdout.strip())
 
 
 def probe_duration(path: Path) -> float:
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                        str(path)], capture_output=True, text=True, creationflags=NO_WINDOW)
     try:
+        r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                            str(path)], capture_output=True, text=True, creationflags=NO_WINDOW, timeout=60)
         return float(r.stdout.strip())
-    except ValueError:
+    except (ValueError, subprocess.TimeoutExpired):
         return 0.0
 
 
@@ -294,7 +302,11 @@ def render_vertical(src: Path, out: Path, webcam: tuple[int, int, int, int] | No
            "-filter_complex", graph.replace(";\n", ";"), "-map", "[v]"]
     cmd += ["-map", "[aout]", "-c:a", "aac", "-b:a", "160k"] if audio else []
     cmd += video_encoder() + ["-t", f"{dur:.3f}", "-r", "30", "-movflags", "+faststart", str(out)]
-    r = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, creationflags=NO_WINDOW)
+    try:  # prazo: um ffmpeg travado nunca mais segura a fila (antes travou tudo por mais de 1 h)
+        r = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, creationflags=NO_WINDOW,
+                           timeout=RENDER_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"ffmpeg passou de {RENDER_TIMEOUT_S // 60} min montando o vídeo — desisti desse clipe")
     if r.returncode != 0:
         raise RuntimeError(f"ffmpeg falhou: {r.stderr[-1500:]}")
     return out
@@ -306,14 +318,22 @@ def make_cover(src: Path, at_s: float, out: Path, webcam: tuple[int, int, int, i
     """Capa = quadro do momento do pico, no mesmo layout, com o card sempre visível."""
     src, out = Path(src).resolve(), Path(out).resolve()
     workdir = out.parent
+    # o quadro tem que existir: se a IA cortou o trecho antes do pico, o tempo caía depois do fim do vídeo e o
+    # ffmpeg ficava pra sempre esperando um quadro que não vem (o fundo do card é infinito)
+    dur = probe_duration(src)
+    at_s = min(max(at_s, 0.0), max(dur - 0.5, 0.0)) if dur > 0 else 0.0
     still = framing.at(at_s) if framing else None  # com -ss o tempo recomeça do zero: câmera fixa no pico
     graph = build_filter(webcam, card or [], None, workdir, handle, accent, 1.0, False,
                          card_s=None, progress=False, framing=still, zoom=zoom)
     graph = graph.replace("+28*max(0,1-t/0.3)", "")
-    r = subprocess.run([ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{max(at_s, 0):.2f}",
-                        "-i", str(src), "-filter_complex", graph.replace(";\n", ";"), "-map", "[v]",
-                        "-frames:v", "1", "-q:v", "2", str(out)],
-                       cwd=workdir, capture_output=True, text=True, creationflags=NO_WINDOW)
+    try:
+        r = subprocess.run([ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{at_s:.2f}",
+                            "-i", str(src), "-filter_complex", graph.replace(";\n", ";"), "-map", "[v]",
+                            "-frames:v", "1", "-q:v", "2", str(out)],
+                           cwd=workdir, capture_output=True, text=True, creationflags=NO_WINDOW,
+                           timeout=COVER_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("capa passou do tempo")
     if r.returncode != 0:
         raise RuntimeError(f"capa falhou: {r.stderr[-800:]}")
     return out

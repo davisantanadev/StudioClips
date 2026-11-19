@@ -88,3 +88,16 @@ def test_ia_sem_cota_pula_o_momento_em_vez_de_clipe_generico(tmp_path, monkeypat
     assert db.list_clips() == [] and any("IA" in n for n in notes)
     # apertou "Cortar agora": aí faz mesmo assim
     assert pipeline.process_candidate(s, make_video(tmp_path / "an2.mp4", 80), 50, settings, manual=True) is not None
+
+def test_ia_escolhe_trecho_antes_do_pico_e_o_clipe_sai_normal(tmp_path, monkeypatch):
+    """Caso real de 19/11/2026: corte de 0-45 s com o pico em 70 s travava a capa (e a fila inteira)."""
+    settings = Settings(data_dir=tmp_path, handle="@teste")
+    db.init(tmp_path / "c.db")
+    monkeypatch.setattr(pipeline, "transcribe", lambda *a, **k: Transcript("pt", [
+        Seg(i, i + 4, f"frase {i}", [Word(i, i + 1, "frase")]) for i in range(0, 80, 5)]))
+    monkeypatch.setattr(ai, "chat_json", lambda *a, **k: {
+        "inicio": 0, "fim": 45, "nota": 9, "motivo": "teste", "card": ["FUGIU DA POLÍCIA", "DE BICICLETA"],
+        "titulo": "Fugiu de bicicleta 😂", "descricao": "Mano.", "hashtags": ["#fuga"]})
+    s = Streamer("alanzoka", "Alanzoka", "pt", [Channel("twitch", "alanzoka")])
+    clip = pipeline.process_candidate(s, make_video(tmp_path / "an.mp4", 80), 70, settings, platform="twitch")
+    assert clip is not None and (tmp_path / clip.cover_path).exists()
