@@ -381,6 +381,7 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
                 raise HTTPException(400, "o horário do agendamento tem que ser pelo menos 5 minutos no futuro")
         st = youtube.status()
         if not st["connected"]:
+            note(f"📺 YouTube recusado ({c.display}): conta do YouTube não conectada no Composio")
             raise HTTPException(409, "o YouTube não está conectado: clique em Conectar YouTube (Ferramentas)")
         video = settings.data_dir / c.video_path
         if not video.exists():

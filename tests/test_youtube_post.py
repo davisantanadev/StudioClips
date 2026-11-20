@@ -84,7 +84,7 @@ def test_erro_do_composio_vira_mensagem_clara(tmp_path, monkeypatch):
         yt.upload(tmp_path / "v.mp4", "t", "d", [], "public")
         assert False, "devia falhar"
     except yt.ComposioError as e:
-        assert "quota" in str(e)
+        assert "limite diário" in str(e)          # "quota exceeded" vira aviso em português
 
 
 def _app(tmp_path, monkeypatch, fake):
@@ -146,3 +146,18 @@ def test_sem_youtube_conectado_avisa(tmp_path, monkeypatch):
     assert c.get("/api/youtube/status").json()["connected"] is False
     r = c.post(f"/api/clips/{cid}/youtube", json={"title": "t", "description": "d", "hashtags": [], "mode": "now"})
     assert r.status_code == 409 and "Conectar YouTube" in r.json()["detail"]
+
+
+def test_cota_diaria_do_youtube_vira_aviso_claro(tmp_path, monkeypatch):
+    """Erro real de 19/11/2026: o projeto do Google do Composio (compartilhado) estourou o limite diário."""
+    quota = {"successful": False, "error": json.dumps({"error": {"code": 429, "message": "Quota exceeded for quota "
+             "metric 'Video Uploads' and limit 'Video Uploads per day' of service 'youtube.googleapis.com'",
+             "status": "RESOURCE_EXHAUSTED"}})}
+    monkeypatch.setattr(yt, "_run", lambda args, timeout=0: subprocess.CompletedProcess(args, 1, json.dumps(quota), ""))
+    (tmp_path / "v.mp4").write_bytes(b"x")
+    try:
+        yt.upload(tmp_path / "v.mp4", "t", "d", [], "public")
+        assert False
+    except yt.ComposioError as e:
+        msg = str(e)
+        assert "limite diário" in msg and "Composio" in msg and len(msg) < 400

@@ -57,6 +57,23 @@ def _json(out: str):
     return None
 
 
+QUOTA_MSG = ("o YouTube bateu o limite diário de envios do Composio (a cota é compartilhada por todos os usuários "
+             "dele e zera à meia-noite do horário do Pacífico, ~4h/5h de Brasília). Tente de novo mais tarde.")
+
+
+def friendly_error(raw: str) -> str:
+    """Erro do YouTube/Composio em português curto (o original vem num JSON enorme)."""
+    low = (raw or "").lower()
+    if "quota" in low and ("upload" in low or "exceeded" in low):
+        return QUOTA_MSG
+    if "uploadlimitexceeded" in low or "upload limit" in low:
+        return "o seu canal atingiu o limite de envios do YouTube por hoje. Tente amanhã."
+    if "unauthorized" in low or "invalid_grant" in low or "401" in low:
+        return "a conexão com o YouTube expirou: clique em Conectar YouTube de novo (Ferramentas)."
+    m = re.search(r'"message"\s*:\s*"([^"]{5,200})"', raw or "")
+    return m.group(1) if m else (raw or "erro desconhecido").strip()[:300]
+
+
 # ---------- textos dentro dos limites do YouTube ----------
 def clean_title(title: str) -> str:
     t = re.sub(r"[<>]", "", re.sub(r"\s+", " ", title or "")).strip()
@@ -149,7 +166,7 @@ def upload(video: Path, title: str, description: str, tags: list[str], privacy: 
     j = _json(r.stdout) or {}
     if r.returncode != 0 or (isinstance(j, dict) and j.get("successful") is False):
         err = (j.get("error") if isinstance(j, dict) else None) or r.stderr.strip()[-300:] or r.stdout.strip()[-300:]
-        raise ComposioError(f"o YouTube recusou o envio: {err}")
+        raise ComposioError(f"o YouTube recusou o envio: {friendly_error(str(err))}")
     vid = find_video_id(j)
     if not vid:
         raise ComposioError("o vídeo subiu, mas não veio o ID dele na resposta")
@@ -166,5 +183,5 @@ def schedule(video_id: str, when_utc: datetime) -> None:
     j = _json(r.stdout)
     bad = r.returncode != 0 or (isinstance(j, dict) and (j.get("error") or j.get("successful") is False))
     if bad:
-        raise ComposioError(f"o vídeo subiu privado, mas o YouTube não aceitou o horário: "
-                            f"{(r.stdout or r.stderr).strip()[-300:]}")
+        raise ComposioError("o vídeo subiu privado, mas o YouTube não aceitou o horário: "
+                            + friendly_error((r.stdout or r.stderr).strip()))
