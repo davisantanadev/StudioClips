@@ -71,7 +71,7 @@ function tile(c) {
       <span class="play">▶</span>
       <span class="dur">${Math.round(c.duration)}s</span>
       ${c.posted ? `<span class="badge-posted">postado</span>` : ""}
-      ${c.yt_status === "agendado" ? `<span class="badge-posted" style="top:34px">📅 YouTube</span>` : c.yt_status === "enviando" ? `<span class="badge-posted" style="top:34px">⏳ YouTube</span>` : c.yt_status === "erro" ? `<span class="badge-posted" style="top:34px">❌ YouTube</span>` : ""}
+      ${c.yt_status === "agendado" ? `<span class="badge-yt">📅 YouTube</span>` : c.yt_status === "enviando" ? `<span class="badge-yt">⏳ YouTube</span>` : c.yt_status === "publicado" ? `<span class="badge-yt">✅ YouTube</span>` : c.yt_status === "erro" ? `<span class="badge-yt err" title="${esc(c.yt_error)}">❌ YouTube</span>` : ""}
       <label class="pick" title="Selecionar"><input type="checkbox" ${state.sel.has(c.id) ? "checked" : ""}></label>
     </div>
     <div class="meta">

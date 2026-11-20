@@ -106,12 +106,12 @@ def vod_heatmap(url: str) -> list[dict]:
     """"Mais repetidos" do YouTube: [{start_time, end_time, value 0-1}]. Vazio se não tiver (VOD nova/pouco vista)."""
     if platform_of(url) != "youtube":
         return []
-    r = subprocess.run([sys.executable, "-m", "yt_dlp", "-J", "--skip-download", url], capture_output=True,
-                       timeout=120, creationflags=NO_WINDOW, **UTF8)
     try:
+        r = subprocess.run([sys.executable, "-m", "yt_dlp", "-J", "--skip-download", url], capture_output=True,
+                           timeout=120, creationflags=NO_WINDOW, **UTF8)
         return list(json.loads(r.stdout).get("heatmap") or [])
-    except (ValueError, AttributeError):
-        return []
+    except (ValueError, AttributeError, OSError, subprocess.SubprocessError):
+        return []  # sem rede / demorou demais: segue sem o "Mais repetidos"
 
 
 def heatmap_boost(scores: list[float], heat: list[dict], bucket: float = BUCKET, weight: float = 4.0) -> list[float]:

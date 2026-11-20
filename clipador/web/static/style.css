@@ -144,6 +144,10 @@ header #pill-live { margin-left: auto; }
 .thumb .dur, .badge-posted { position: absolute; bottom: 8px; font-size: 11px; font-weight: 700; padding: 2px 7px;
   border-radius: 6px; background: rgba(0,0,0,.7); }
 .thumb .dur { right: 8px; } .badge-posted { left: 8px; background: color-mix(in srgb, var(--ok) 80%, #000); color: #04140d; }
+/* selo do YouTube: pequeno, no canto de cima (antes herdava o "bottom" do selo postado e virava um bloco gigante) */
+.badge-yt { position: absolute; top: 42px; left: 8px; font-size: 11px; font-weight: 700; padding: 2px 7px;
+  border-radius: 6px; background: rgba(0,0,0,.75); color: #fff; white-space: nowrap; }
+.badge-yt.err { background: color-mix(in srgb, var(--acc) 85%, #000); }
 .pick { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.6); border-radius: 8px; padding: 6px; display: flex; }
 .tile .meta { padding: 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .tile .who { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--mut); }

@@ -26,7 +26,14 @@ jobs:
           python -m pip install -e ".[dev,build]"
 
       - name: Testes rápidos
-        run: python -m pytest -q -m "not slow"
+        shell: pwsh
+        run: |
+          python -m pytest -q -m "not slow" -rf -p no:cacheprovider 2>&1 | Tee-Object -Variable out
+          if ($LASTEXITCODE -ne 0) {
+            # o log do Actions só abre logado; as anotações são públicas: o nome do teste que falhou aparece lá
+            $out | Select-String -Pattern "^(FAILED|ERROR) |^E " | Select-Object -First 15 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+            exit 1
+          }
 
       - name: Montar o .exe (com FFmpeg)
         shell: pwsh
