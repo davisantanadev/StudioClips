@@ -80,3 +80,24 @@ def test_por_padrao_so_clipa_quem_esta_na_lista():
     assert settings.auto_discover is False
     luan = next(s for s in streamers if s.name == "luanz7")
     assert ("kick", "luanz7") in {(c.platform, c.channel) for c in luan.channels} and luan.is_pt
+
+def test_banco_antigo_ganha_as_colunas_novas_sem_perder_clipes(tmp_path):
+    """Banco de versão antiga (sem Lixeira e sem YouTube) abre e mantém os clipes."""
+    import sqlite3
+    from clipador import db
+    p = tmp_path / "antigo.db"
+    c = sqlite3.connect(p)
+    c.execute("""CREATE TABLE clips (id INTEGER PRIMARY KEY AUTOINCREMENT, streamer TEXT NOT NULL,
+        display TEXT NOT NULL, platform TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, workdir TEXT NOT NULL,
+        video_path TEXT NOT NULL, cover_path TEXT NOT NULL, card TEXT NOT NULL, title TEXT NOT NULL,
+        description TEXT NOT NULL, hashtags TEXT NOT NULL, transcript TEXT NOT NULL DEFAULT '',
+        lang TEXT NOT NULL DEFAULT '', duration REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pronto',
+        posted INTEGER NOT NULL DEFAULT 0)""")
+    c.execute("INSERT INTO clips (streamer, display, created_at, workdir, video_path, cover_path, card, title, "
+              "description, hashtags) VALUES ('a','A',1,'w','w/f.mp4','w/c.jpg','[]','t','d','[]')")
+    c.commit()
+    c.close()
+    db.init(p)
+    got = db.list_clips()
+    assert len(got) == 1 and got[0].yt_status == "" and got[0].deleted_at == 0
+    db.init(p)                                   # abrir de novo não quebra

@@ -76,6 +76,14 @@ O `teste` gera um clipe a partir de um vídeo seu, usando como pico o segundo in
 - Em **Ferramentas → Configurações**, escolha a **📁 Pasta onde salvar os vídeos** e a **📁 Pasta onde salvar as capas** (botão **Escolher…** abre o seletor de pasta do Windows; também dá pra colar o caminho). Sem escolher, vai pra `Vídeos\StudioClips` e `Imagens\StudioClips`.
 - **⬇ Vídeo** e **🖼 Capa** salvam **direto** nessas pastas, sem abrir janela, com o título do clipe como nome e a extensão certa (`.mp4` / `.jpg`). Se já existir um com o mesmo nome, vira "nome (2)". **💾 Salvar selecionados** salva vários de uma vez.
 
+## Postar no YouTube (pelo Composio)
+
+- Uma vez: instale o [Composio CLI](https://composio.dev) e faça `composio login`. Depois, em **Ferramentas → Configurações**, clique em **Conectar YouTube**, entre com a conta do canal, autorize e clique em **Atualizar**.
+- No clipe aberto, ajuste título, descrição e hashtags e clique em:
+  - **🚀 Postar agora**: sobe como **público** na categoria Jogos.
+  - **📅 Agendar** (escolha data e hora): sobe na hora como **privado** e o próprio YouTube publica no horário, **mesmo com o PC desligado**.
+- Nada é postado sem você clicar (e confirmar). O status aparece no clipe (⏳ enviando, ✅ publicado, 📅 agendado, ❌ erro) com o link do vídeo.
+
 ## Seus clipes não somem
 
 - **Excluir manda pra 🗑 Lixeira** (em Clips). Dá pra **♻ Restaurar** quando quiser; só **Apagar de vez** (dentro da Lixeira, com confirmação) remove o vídeo do computador.

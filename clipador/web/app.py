@@ -98,6 +98,14 @@ class ExportIn(BaseModel):
     kind: Literal["video", "cover", "both"] = "video"
 
 
+class YouTubeIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field("", max_length=6000)
+    hashtags: list[str] = Field(default_factory=list, max_length=60)
+    mode: Literal["now", "schedule"] = "now"
+    when: str = ""  # agendar: "AAAA-MM-DDTHH:MM" no horário do PC
+
+
 class PickIn(BaseModel):
     kind: Literal["video", "cover"] = "video"
 
@@ -338,6 +346,66 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
         if not got:
             raise HTTPException(409, "não escolheu pasta (no navegador, digite o caminho no campo)")
         return {"path": got}
+
+    # ---------- YouTube (pelo Composio) ----------
+    @app.get("/api/youtube/status")
+    def youtube_status():
+        from .. import youtube
+        return youtube.status()
+
+    @app.post("/api/youtube/connect")
+    def youtube_connect():
+        from .. import youtube
+        try:
+            return {"url": youtube.connect_url()}
+        except Exception as e:
+            raise HTTPException(502, f"não deu pra gerar o link do YouTube: {e}")
+
+    @app.post("/api/clips/{clip_id}/youtube")
+    def youtube_post(clip_id: int, body: YouTubeIn):
+        """Posta agora (público) ou agenda (sobe privado e o YouTube publica no horário). Só quando você clica."""
+        from datetime import datetime, timezone
+        from .. import youtube
+        c = db.get_clip(clip_id)
+        if not c:
+            raise HTTPException(404)
+        if c.yt_status == "enviando":
+            raise HTTPException(409, "esse clipe já está sendo enviado pro YouTube")
+        when = None
+        if body.mode == "schedule":
+            try:
+                when = datetime.strptime(body.when.strip()[:16], "%Y-%m-%dT%H:%M").astimezone()  # horário do PC
+            except ValueError:
+                raise HTTPException(400, "escolha a data e a hora do agendamento")
+            if when.timestamp() < time.time() + 5 * 60:
+                raise HTTPException(400, "o horário do agendamento tem que ser pelo menos 5 minutos no futuro")
+        st = youtube.status()
+        if not st["connected"]:
+            raise HTTPException(409, "o YouTube não está conectado: clique em Conectar YouTube (Ferramentas)")
+        video = settings.data_dir / c.video_path
+        if not video.exists():
+            raise HTTPException(404, "o arquivo do vídeo desse clipe não existe mais")
+        tags = [h if h.startswith("#") else f"#{h}" for h in body.hashtags if h.strip()]
+        db.update_clip(clip_id, title=body.title.strip(), description=body.description.strip(), hashtags=tags,
+                       yt_status="enviando", yt_error="", yt_when=when.timestamp() if when else 0)
+
+        def run():
+            try:
+                desc = youtube.build_description(body.description, tags)
+                vid = youtube.upload(video, body.title, desc, youtube.clean_tags(tags),
+                                     "public" if when is None else "private")
+                db.update_clip(clip_id, yt_video_id=vid)
+                if when is not None:
+                    youtube.schedule(vid, when.astimezone(timezone.utc))
+                db.update_clip(clip_id, yt_status="agendado" if when else "publicado", posted=True)
+                note(f"📺 {c.display}: {'agendado no YouTube' if when else 'publicado no YouTube'} — "
+                     f"https://youtu.be/{vid}")
+            except Exception as e:
+                log.exception("YouTube")
+                db.update_clip(clip_id, yt_status="erro", yt_error=str(e)[:400])
+                note(f"❌ YouTube ({c.display}): {e}")
+        bg(f"enviando pro YouTube #{clip_id}", run)
+        return {"ok": True}
 
     @app.post("/api/clips/bulk-delete")
     def bulk_delete(body: IdsIn):

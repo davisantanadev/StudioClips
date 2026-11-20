@@ -6,6 +6,28 @@ const api = async (url, opt = {}) => {
   if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(m); }
   return r.json();
 };
+// YouTube: status do envio e horário sugerido (daqui a 1 h, arredondado)
+function ytLine(c) {
+  if (!c.yt_status) return "";
+  const link = c.yt_video_id ? ` <a href="https://youtu.be/${esc(c.yt_video_id)}" target="_blank" rel="noopener">abrir no YouTube</a>` : "";
+  if (c.yt_status === "enviando") return `<div class="hint">⏳ Enviando pro YouTube… (pode levar uns minutos)</div>`;
+  if (c.yt_status === "publicado") return `<div class="hint">✅ Publicado no YouTube.${link}</div>`;
+  if (c.yt_status === "agendado") return `<div class="hint">📅 Agendado pra ${new Date(c.yt_when * 1000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.${link}</div>`;
+  return `<div class="hint" style="color:var(--acc)">❌ Não foi: ${esc(c.yt_error)}</div>`;
+}
+function ytDefaultWhen() {
+  const d = new Date(Date.now() + 60 * 60 * 1000); d.setMinutes(d.getMinutes() < 30 ? 30 : 60, 0, 0);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function ytPost(c, mode, when, f) {
+  const body = { title: f("title"), description: f("description"), hashtags: f("hashtags").split(/\s+/).filter(Boolean), mode, when };
+  const msg = mode === "now" ? "Postar esse clipe AGORA no seu canal do YouTube, como público?"
+    : `Agendar esse clipe no seu canal do YouTube pra ${new Date(when).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}?`;
+  if (!confirm(msg)) return;
+  await api(`/api/clips/${c.id}/youtube`, { method: "POST", body: JSON.stringify(body) });
+  toast(mode === "now" ? "📺 Enviando pro YouTube…" : "📅 Enviando e agendando no YouTube…");
+}
 // salvar direto na pasta escolhida (sem a janela "Salvar como", que salvava sem .mp4)
 async function saveClip(c, kind) {
   const r = await api(`/api/clips/${c.id}/export`, { method: "POST", body: JSON.stringify({ kind }) });
@@ -49,6 +71,7 @@ function tile(c) {
       <span class="play">▶</span>
       <span class="dur">${Math.round(c.duration)}s</span>
       ${c.posted ? `<span class="badge-posted">postado</span>` : ""}
+      ${c.yt_status === "agendado" ? `<span class="badge-posted" style="top:34px">📅 YouTube</span>` : c.yt_status === "enviando" ? `<span class="badge-posted" style="top:34px">⏳ YouTube</span>` : c.yt_status === "erro" ? `<span class="badge-posted" style="top:34px">❌ YouTube</span>` : ""}
       <label class="pick" title="Selecionar"><input type="checkbox" ${state.sel.has(c.id) ? "checked" : ""}></label>
     </div>
     <div class="meta">
@@ -99,13 +122,19 @@ async function loadClips() {
   state.trash = trash;
   if (trashChanged && inTrash()) renderGrid();
   const fresh = all.filter((c) => !state.known.has(c.id));
-  const key = (c) => [c.id, c.posted, c.status, c.title, c.card, c.v];
+  const key = (c) => [c.id, c.posted, c.status, c.title, c.card, c.v, c.yt_status];
   const changed = JSON.stringify(all.map(key)) !== JSON.stringify(state.clips.map(key));
   const prevOpen = state.clips.find((c) => c.id === state.open);
   state.clips = all;
   if (changed) renderGrid();
   // vídeo aberto foi refeito (card novo): troca pelo vídeo novo sozinho
   const nowOpen = all.find((c) => c.id === state.open);
+  if (prevOpen && nowOpen && prevOpen.yt_status !== nowOpen.yt_status) {
+    openViewer(nowOpen.id);
+    if (nowOpen.yt_status === "publicado") toast("✅ Publicado no YouTube");
+    if (nowOpen.yt_status === "agendado") toast("📅 Agendado no YouTube");
+    if (nowOpen.yt_status === "erro") toast("❌ YouTube: " + nowOpen.yt_error);
+  }
   if (prevOpen && nowOpen && (prevOpen.v !== nowOpen.v || prevOpen.status !== nowOpen.status)) {
     openViewer(nowOpen.id);
     if (prevOpen.status === "refazendo" && nowOpen.status !== "refazendo")
@@ -212,6 +241,12 @@ function openViewer(id) {
     <div class="field"><label>Descrição <button class="mini" data-copy="description">copiar</button></label><textarea data-f="description" rows="3">${esc(c.description)}</textarea></div>
     <div class="field"><label>Hashtags <button class="mini" data-copy="hashtags">copiar</button></label><input data-f="hashtags" value="${esc(c.hashtags.join(" "))}"></div>
     <div class="row"><button data-a="save">💾 Salvar textos</button><button data-a="copyall" class="primary">📋 Copiar tudo</button></div>
+    <div class="field yt-box"><label>📺 Postar no YouTube <span class="hint">usa o título, a descrição e as hashtags acima</span></label>
+      ${ytLine(c)}
+      <div class="row"><button class="primary" data-a="yt-now" ${c.yt_status === "enviando" ? "disabled" : ""}>🚀 Postar agora (público)</button></div>
+      <div class="row"><input type="datetime-local" data-f="yt-when" value="${ytDefaultWhen()}">
+        <button data-a="yt-schedule" ${c.yt_status === "enviando" ? "disabled" : ""}>📅 Agendar</button></div>
+      <div class="hint">Agendar: o vídeo sobe agora como privado e o próprio YouTube publica no horário (pode desligar o PC). Nada é postado sem você clicar.</div></div>
     <div class="field card-edit"><label>Card do vídeo (máx. 2 linhas de 42 letras)</label>
       <input data-f="l1" maxlength="42" value="${esc(c.card[0] || "")}"><input data-f="l2" maxlength="42" value="${esc(c.card[1] || "")}">
       <button data-a="card" ${busy ? "disabled" : ""}>${busy ? "⏳ Refazendo o vídeo… (troca sozinho quando ficar pronto)" : "🔁 Refazer vídeo com esse card"}</button></div>
@@ -240,6 +275,8 @@ $("#viewer").addEventListener("click", async (e) => {
   try {
     if (a === "save-video") return await saveClip(c, "video");
     if (a === "save-cover") return await saveClip(c, "cover");
+    if (a === "yt-now") await ytPost(c, "now", "", f);
+    if (a === "yt-schedule") await ytPost(c, "schedule", f("yt-when"), f);
     if (a === "copyall") return copy(`${f("title")}\n\n${f("description")}\n\n${f("hashtags")}`, "Título + descrição + hashtags copiados");
     if (a === "posted") { await api(`/api/clips/${c.id}/posted`, { method: "POST", body: JSON.stringify({ posted: !c.posted }) }); toast(c.posted ? "Voltou pra fila" : "Marcado como postado"); }
     if (a === "save") { await api(`/api/clips/${c.id}`, { method: "PATCH", body: JSON.stringify({ title: f("title"), description: f("description"), hashtags: f("hashtags").split(/\s+/).filter(Boolean) }) }); toast("Textos salvos"); }
@@ -334,6 +371,22 @@ $$("[data-pick-dir]").forEach((b) => b.addEventListener("click", async () => {
     toast(`📁 ${kind === "video" ? "Vídeos" : "Capas"} vão pra ${r.path}`);
   } catch (err) { toast(err.message.includes("escolheu") ? "Nenhuma pasta escolhida (no navegador, digite o caminho e Salve)" : "Erro: " + err.message); }
 }));
+async function loadYouTube() {
+  try {
+    const s = await api("/api/youtube/status");
+    $("#yt-state").textContent = !s.installed ? "o Composio não está instalado neste PC."
+      : !s.logged_in ? "faça o login do Composio (composio login no terminal)."
+      : s.connected ? "✅ conectado." : "não conectado — clique em Conectar YouTube.";
+  } catch { $("#yt-state").textContent = "não deu pra verificar agora."; }
+}
+$("#yt-refresh").addEventListener("click", loadYouTube);
+$("#yt-connect").addEventListener("click", async () => {
+  try {
+    const r = await api("/api/youtube/connect", { method: "POST" });
+    window.open(r.url, "_blank");
+    toast("Abri a página do Composio: entre com a conta do seu canal, autorize e depois clique em Atualizar");
+  } catch (err) { toast("Erro: " + err.message); }
+});
 $("#test-twitch").addEventListener("click", async () => {
   $("#twitch-res").textContent = "testando…";
   try { await api("/api/settings/test-twitch", { method: "POST" }); $("#twitch-res").textContent = "ok"; toast("✅ Twitch funcionando"); }
@@ -505,7 +558,7 @@ window.addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye
 // segura uma trava pra o navegador não "congelar" a aba em segundo plano (senão o Clipador acharia que ela fechou)
 try { navigator.locks?.request("clipador-painel", () => new Promise(() => {})); } catch {}
 go(location.hash.slice(1) || "clips");
-loadStreamers(); loadClips(); loadStatus(); loadSettings().catch(() => {}); loadVods();
+loadStreamers(); loadClips(); loadStatus(); loadSettings().catch(() => {}); loadVods(); loadYouTube();
 // janela/aba escondida (minimizada, outra aba na frente): não redesenha nada, só avisa a cada 30 s que
 // o painel continua aberto (senão o Clipador acharia que a aba fechou). Ao voltar, atualiza na hora.
 let lastPing = 0;

@@ -30,7 +30,11 @@ CREATE TABLE IF NOT EXISTS clips (
   duration REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pronto',
   posted INTEGER NOT NULL DEFAULT 0,
-  deleted_at REAL NOT NULL DEFAULT 0
+  deleted_at REAL NOT NULL DEFAULT 0,
+  yt_status TEXT NOT NULL DEFAULT '',
+  yt_video_id TEXT NOT NULL DEFAULT '',
+  yt_when REAL NOT NULL DEFAULT 0,
+  yt_error TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -54,6 +58,10 @@ class Clip:
     posted: bool = False
     created_at: float = field(default_factory=time.time)
     deleted_at: float = 0.0  # > 0 = está na Lixeira (arquivos continuam no disco)
+    yt_status: str = ""      # YouTube: "" | enviando | publicado | agendado | erro
+    yt_video_id: str = ""
+    yt_when: float = 0.0     # agendado: quando o YouTube publica
+    yt_error: str = ""
     id: int | None = None
 
     def to_json(self) -> dict:
@@ -67,8 +75,12 @@ def init(path: Path | str) -> None:
     with _conn() as c:
         c.executescript(SCHEMA)
         cols = {r[1] for r in c.execute("PRAGMA table_info(clips)")}
-        if "deleted_at" not in cols:  # banco de versão antiga: ganha a Lixeira sem perder nada
-            c.execute("ALTER TABLE clips ADD COLUMN deleted_at REAL NOT NULL DEFAULT 0")
+        # banco de versão antiga: ganha as colunas novas sem perder nada
+        for col, kind in (("deleted_at", "REAL NOT NULL DEFAULT 0"), ("yt_status", "TEXT NOT NULL DEFAULT ''"),
+                          ("yt_video_id", "TEXT NOT NULL DEFAULT ''"), ("yt_when", "REAL NOT NULL DEFAULT 0"),
+                          ("yt_error", "TEXT NOT NULL DEFAULT ''")):
+            if col not in cols:
+                c.execute(f"ALTER TABLE clips ADD COLUMN {col} {kind}")
 
 
 def _conn() -> sqlite3.Connection:
