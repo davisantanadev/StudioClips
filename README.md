@@ -71,6 +71,11 @@ O `teste` gera um clipe a partir de um vídeo seu, usando como pico o segundo in
 - **Lives do YouTube**: o chat ao vivo do YouTube é lido pelo yt-dlp (a biblioteca antiga parou de funcionar em nov/2026 e as lives do YouTube nunca disparavam corte).
 - A busca automática de lives fora da lista existe, mas vem **desligada** (Ferramentas → Configurações).
 
+## Onde os vídeos e as capas são salvos
+
+- Em **Ferramentas → Configurações**, escolha a **📁 Pasta onde salvar os vídeos** e a **📁 Pasta onde salvar as capas** (botão **Escolher…** abre o seletor de pasta do Windows; também dá pra colar o caminho). Sem escolher, vai pra `Vídeos\StudioClips` e `Imagens\StudioClips`.
+- **⬇ Vídeo** e **🖼 Capa** salvam **direto** nessas pastas, sem abrir janela, com o título do clipe como nome e a extensão certa (`.mp4` / `.jpg`). Se já existir um com o mesmo nome, vira "nome (2)". **💾 Salvar selecionados** salva vários de uma vez.
+
 ## Seus clipes não somem
 
 - **Excluir manda pra 🗑 Lixeira** (em Clips). Dá pra **♻ Restaurar** quando quiser; só **Apagar de vez** (dentro da Lixeira, com confirmação) remove o vídeo do computador.

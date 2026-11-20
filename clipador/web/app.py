@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from .. import db
 from .. import twitchclips
+from ..export import export_clip, resolve_dirs
 from ..recover import GONE_MARK
 from ..ai import PROVIDERS, any_key, check_providers, groq_key
 from ..ai import reset_state as reset_ai_state
@@ -84,11 +85,21 @@ class SettingsIn(BaseModel):
     auto_webcam: bool | None = None
     auto_discover: bool | None = None
     discover_min_viewers: int | None = Field(None, ge=0, le=1_000_000)
+    save_video_dir: str | None = Field(None, max_length=500)
+    save_cover_dir: str | None = Field(None, max_length=500)
     groq_key: str | None = Field(None, max_length=2000)
     cerebras_key: str | None = Field(None, max_length=2000)
     gemini_key: str | None = Field(None, max_length=2000)
     twitch_client_id: str | None = Field(None, max_length=200)
     twitch_client_secret: str | None = Field(None, max_length=200)
+
+
+class ExportIn(BaseModel):
+    kind: Literal["video", "cover", "both"] = "video"
+
+
+class PickIn(BaseModel):
+    kind: Literal["video", "cover"] = "video"
 
 
 def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
@@ -154,12 +165,16 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
         k = ks[0]
         return f"{k[:4]}…{k[-4:]}" + (f" +{len(ks) - 1}" if len(ks) > 1 else "")
 
+    def save_dirs():
+        return resolve_dirs(settings.save_video_dir, settings.save_cover_dir)
+
     def settings_out() -> dict:
         k = groq_key() or ""
         return {"keys": {p.name: _hint(p.env) for p in PROVIDERS},
                 "signup": {p.name: p.signup for p in PROVIDERS}, "handle": settings.handle, "min_score": settings.min_score, "card_seconds": settings.card_seconds,
                 "require_gta": settings.require_gta, "zoom": settings.zoom, "auto_webcam": settings.auto_webcam,
                 "auto_discover": settings.auto_discover, "discover_min_viewers": settings.discover_min_viewers,
+                "save_video_dir": str(save_dirs()[0]), "save_cover_dir": str(save_dirs()[1]),
                 "quality": ("max" if settings.quality == QUALITY_MAX else
                             "hd" if settings.quality.startswith("1080") else "leve"),
                 "groq_key_set": bool(k),
@@ -179,6 +194,12 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
                  ("twitch_client_id", "TWITCH_CLIENT_ID"), ("twitch_client_secret", "TWITCH_CLIENT_SECRET"))}
         if "quality" in changes:  # vale pras lives que começarem a gravar depois de salvar
             changes["quality"] = {"max": QUALITY_MAX, "hd": QUALITY_HD}.get(changes["quality"], QUALITY_LIGHT)
+        for k in ("save_video_dir", "save_cover_dir"):
+            if k in changes:
+                v = changes[k].strip().strip("\"")
+                if v and not Path(v).is_absolute():
+                    raise HTTPException(400, "use o caminho completo da pasta (ex.: C:\\Users\\voce\\Videos)")
+                changes[k] = v
         if "handle" in changes:
             h = changes["handle"].strip()
             changes["handle"] = h if not h or h.startswith("@") else "@" + h
@@ -282,6 +303,41 @@ def create_app(settings: Settings, runner=None, presence=None) -> FastAPI:
         shutil.rmtree(folder, ignore_errors=True)
         db.delete_clip(clip_id)
         return True
+
+    @app.post("/api/clips/{clip_id}/export")
+    def export_one(clip_id: int, body: ExportIn):
+        """Salva direto na pasta escolhida (sem janela "Salvar como"), já com .mp4/.jpg no nome."""
+        c = db.get_clip(clip_id)
+        if not c:
+            raise HTTPException(404)
+        vdir, cdir = save_dirs()
+        try:
+            return {"paths": export_clip(c, settings.data_dir, body.kind, vdir, cdir)}
+        except (OSError, FileNotFoundError) as e:
+            raise HTTPException(500, f"não deu pra salvar: {e}")
+
+    @app.post("/api/clips/bulk-export")
+    def export_many(body: IdsIn):
+        vdir, cdir = save_dirs()
+        paths = []
+        for i in body.ids:
+            c = db.get_clip(i)
+            if c:
+                try:
+                    paths += export_clip(c, settings.data_dir, "both", vdir, cdir)
+                except (OSError, FileNotFoundError):
+                    log.exception("salvar clipe %s", i)
+        return {"paths": paths, "video_dir": str(vdir), "cover_dir": str(cdir)}
+
+    @app.post("/api/pick-folder")
+    def pick_folder(body: PickIn):
+        """Seletor de pasta do Windows (só na janela do app; no navegador, digite o caminho)."""
+        from .. import desktop
+        start = str(save_dirs()[0 if body.kind == "video" else 1])
+        got = desktop.pick_folder(start)
+        if not got:
+            raise HTTPException(409, "não escolheu pasta (no navegador, digite o caminho no campo)")
+        return {"path": got}
 
     @app.post("/api/clips/bulk-delete")
     def bulk_delete(body: IdsIn):

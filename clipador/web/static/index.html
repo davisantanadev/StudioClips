@@ -36,7 +36,7 @@
 
     <div class="bulkbar" id="bulkbar" hidden>
       <b id="sel-n">0 selecionados</b>
-      <button class="primary" data-bulk="zip">⬇ Baixar selecionados (.zip)</button>
+      <button class="primary" data-bulk="save" data-mode="list">💾 Salvar selecionados nas pastas</button>
       <button data-bulk="posted">✅ Marcar como postados</button>
       <button data-bulk="unposted">↩ Voltar pra fila</button>
       <button data-bulk="delete" class="danger" data-mode="list">🗑 Mandar pra Lixeira</button>
@@ -137,6 +137,13 @@
               <option value="hd">HD 1080p60: webcam nítida (recomendado)</option>
               <option value="leve">Leve 720p: gasta metade da internet</option>
             </select></div>
+          <div><label class="lbl" for="set-vdir">📁 Pasta onde salvar os vídeos</label>
+            <div class="row"><input id="set-vdir" name="save_video_dir" class="grow" placeholder="C:\Users\…\Videos\StudioClips">
+              <button type="button" data-pick-dir="video">Escolher…</button></div></div>
+          <div><label class="lbl" for="set-cdir">📁 Pasta onde salvar as capas</label>
+            <div class="row"><input id="set-cdir" name="save_cover_dir" class="grow" placeholder="C:\Users\…\Pictures\StudioClips">
+              <button type="button" data-pick-dir="cover">Escolher…</button></div>
+            <div class="hint">Os botões ⬇ Vídeo e 🖼 Capa salvam direto nessas pastas, com o título como nome (.mp4 e .jpg), sem abrir janela.</div></div>
           <label class="check-inline"><input type="checkbox" name="auto_webcam" id="set-autocam"> Achar a webcam do streamer sozinho</label>
           <label class="check-inline"><input type="checkbox" name="require_gta" id="set-gta"> Gravar só quando a live for de GTA</label>
           <label class="check-inline"><input type="checkbox" name="auto_discover" id="set-discover"> Achar sozinho as lives de GTA mais vistas agora (Twitch, Kick e YouTube), além da lista</label>

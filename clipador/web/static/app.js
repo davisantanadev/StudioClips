@@ -6,7 +6,12 @@ const api = async (url, opt = {}) => {
   if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(m); }
   return r.json();
 };
-const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2400); };
+// salvar direto na pasta escolhida (sem a janela "Salvar como", que salvava sem .mp4)
+async function saveClip(c, kind) {
+  const r = await api(`/api/clips/${c.id}/export`, { method: "POST", body: JSON.stringify({ kind }) });
+  toast(`💾 Salvo em ${r.paths.join(" e ")}`);
+}
+const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), Math.min(7000, 2400 + msg.length * 25)); };
 const copy = async (text, msg = "Copiado!") => { await navigator.clipboard.writeText(text); toast(msg); };
 const ago = (ts) => { const s = Date.now() / 1000 - ts; if (s < 60) return "agora"; if (s < 3600) return `${Math.floor(s / 60)} min`; if (s < 86400) return `${Math.floor(s / 3600)} h`; return new Date(ts * 1000).toLocaleDateString("pt-BR"); };
 const PLAT = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
@@ -53,7 +58,7 @@ function tile(c) {
         <button class="grow" data-a="restore">♻ Restaurar</button>
         <button class="danger ghost" data-a="purge">Apagar de vez</button>
       </div>` : `<div class="quick">
-        <a class="btn icon" href="/media/${c.video_path}${ver(c)}" download="${c.streamer}_${c.id}.mp4" title="Baixar vídeo">⬇</a>
+        <button class="icon" data-a="save-video" title="Salvar o vídeo na sua pasta">⬇</button>
         <button class="icon" data-a="copy" title="Copiar texto do post">📋</button>
         <button class="icon" data-a="posted" title="${c.posted ? "Voltar pra fila" : "Marcar postado"}">${c.posted ? "↩" : "✅"}</button>
         <button class="icon grow" data-open>Abrir</button>
@@ -78,7 +83,7 @@ function renderBulk() {
   // descarta seleções de clipes que sumiram
   const ids = new Set((inTrash() ? state.trash : state.clips).map((c) => c.id));
   $$("#bulkbar [data-mode]").forEach((b) => (b.hidden = b.dataset.mode !== (inTrash() ? "trash" : "list")));
-  $$("#bulkbar [data-bulk=zip], #bulkbar [data-bulk=posted], #bulkbar [data-bulk=unposted]").forEach((b) => (b.hidden = inTrash()));
+  $$("#bulkbar [data-bulk=posted], #bulkbar [data-bulk=unposted]").forEach((b) => (b.hidden = inTrash()));
   state.sel.forEach((id) => !ids.has(id) && state.sel.delete(id));
   const n = state.sel.size;
   $("#bulkbar").hidden = n === 0;
@@ -125,6 +130,7 @@ $("#grid").addEventListener("click", async (e) => {
   const a = e.target.closest("[data-a]")?.dataset.a;
   try {
     if (a === "copy") return copy(postText(c), "Título + descrição + hashtags copiados");
+    if (a === "save-video") return await saveClip(c, "video");
     if (a === "posted") { await api(`/api/clips/${c.id}/posted`, { method: "POST", body: JSON.stringify({ posted: !c.posted }) }); toast(c.posted ? "Voltou pra fila" : "Marcado como postado"); return loadClips(); }
     if (a === "restore") { await api(`/api/clips/${c.id}/restore`, { method: "POST" }); toast("♻ Voltou pra lista"); await loadClips(); return renderGrid(); }
     if (a === "purge") {
@@ -152,6 +158,10 @@ $("#bulkbar").addEventListener("click", async (e) => {
   const ids = [...state.sel];
   try {
     if (a === "clear") { state.sel.clear(); return renderGrid(); }
+    if (a === "save") {
+      const r = await api("/api/clips/bulk-export", { method: "POST", body: JSON.stringify({ ids }) });
+      return toast(`💾 ${ids.length} clipe(s) salvos — vídeos em ${r.video_dir} · capas em ${r.cover_dir}`);
+    }
     if (a === "zip") {
       toast("Preparando o .zip…");
       const r = await fetch("/api/clips/zip", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
@@ -194,8 +204,8 @@ function openViewer(id) {
   $("#v-side").innerHTML = `
     <div class="who"><b>${esc(c.display)}</b><span>${esc(PLAT[c.platform] || c.platform)} · ${ago(c.created_at)} · ${Math.round(c.duration)}s</span></div>
     <div class="actions-main">
-      <a class="btn primary" href="/media/${c.video_path}${ver(c)}" download="${c.streamer}_${c.id}.mp4">⬇ Baixar vídeo</a>
-      <a class="btn" href="/media/${c.cover_path}${ver(c)}" download="${c.streamer}_${c.id}_capa.jpg">🖼 Capa</a>
+      <button class="primary" data-a="save-video">⬇ Salvar vídeo</button>
+      <button data-a="save-cover">🖼 Salvar capa</button>
       <button data-a="posted">${c.posted ? "↩ Voltar pra fila" : "✅ Postado"}</button>
     </div>
     <div class="field"><label>Título <button class="mini" data-copy="title">copiar</button></label><input data-f="title" value="${esc(c.title)}"></div>
@@ -228,6 +238,8 @@ $("#viewer").addEventListener("click", async (e) => {
   if (cp) return copy(f(cp), "Copiado");
   const a = e.target.closest("[data-a]")?.dataset.a; if (!a) return;
   try {
+    if (a === "save-video") return await saveClip(c, "video");
+    if (a === "save-cover") return await saveClip(c, "cover");
     if (a === "copyall") return copy(`${f("title")}\n\n${f("description")}\n\n${f("hashtags")}`, "Título + descrição + hashtags copiados");
     if (a === "posted") { await api(`/api/clips/${c.id}/posted`, { method: "POST", body: JSON.stringify({ posted: !c.posted }) }); toast(c.posted ? "Voltou pra fila" : "Marcado como postado"); }
     if (a === "save") { await api(`/api/clips/${c.id}`, { method: "PATCH", body: JSON.stringify({ title: f("title"), description: f("description"), hashtags: f("hashtags").split(/\s+/).filter(Boolean) }) }); toast("Textos salvos"); }
@@ -278,6 +290,8 @@ async function loadSettings() {
   $("#set-zoom").value = s.zoom;
   $("#set-quality").value = s.quality;
   $("#set-autocam").checked = s.auto_webcam;
+  $("#set-vdir").value = s.save_video_dir;
+  $("#set-cdir").value = s.save_cover_dir;
   $("#set-discover").checked = s.auto_discover;
   $("#set-discover-min").value = s.discover_min_viewers;
   $$(".key-state").forEach((el) => { const h = s.keys[el.dataset.p]; el.textContent = h ? `· salva (${h})` : "· sem chave"; });
@@ -292,7 +306,8 @@ $("#settings-form").addEventListener("submit", async (e) => {
   const fd = new FormData(e.target);
   const body = { handle: fd.get("handle").trim(), min_score: +fd.get("min_score"), require_gta: $("#set-gta").checked,
     zoom: fd.get("zoom"), quality: fd.get("quality"), auto_webcam: $("#set-autocam").checked,
-    auto_discover: $("#set-discover").checked, discover_min_viewers: +fd.get("discover_min_viewers") || 0 };
+    auto_discover: $("#set-discover").checked, discover_min_viewers: +fd.get("discover_min_viewers") || 0,
+    save_video_dir: fd.get("save_video_dir").trim(), save_cover_dir: fd.get("save_cover_dir").trim() };
   for (const k of ["groq_key", "cerebras_key", "gemini_key", "twitch_client_id", "twitch_client_secret"]) if (fd.get(k).trim()) body[k] = fd.get(k).trim();
   try {
     await api("/api/settings", { method: "PUT", body: JSON.stringify(body) });
@@ -309,6 +324,16 @@ $("#test-key").addEventListener("click", async () => {
     toast("✅ IA funcionando");
   } catch (err) { $("#test-res").textContent = ""; toast("❌ " + err.message); }
 });
+$$("[data-pick-dir]").forEach((b) => b.addEventListener("click", async () => {
+  const kind = b.dataset.pickDir;
+  try {
+    const r = await api("/api/pick-folder", { method: "POST", body: JSON.stringify({ kind }) });
+    const field = kind === "video" ? "save_video_dir" : "save_cover_dir";
+    await api("/api/settings", { method: "PUT", body: JSON.stringify({ [field]: r.path }) });
+    await loadSettings();
+    toast(`📁 ${kind === "video" ? "Vídeos" : "Capas"} vão pra ${r.path}`);
+  } catch (err) { toast(err.message.includes("escolheu") ? "Nenhuma pasta escolhida (no navegador, digite o caminho e Salve)" : "Erro: " + err.message); }
+}));
 $("#test-twitch").addEventListener("click", async () => {
   $("#twitch-res").textContent = "testando…";
   try { await api("/api/settings/test-twitch", { method: "POST" }); $("#twitch-res").textContent = "ok"; toast("✅ Twitch funcionando"); }
